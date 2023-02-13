@@ -11,7 +11,7 @@ void
 coro_sched_init(void);
 
 /**
- * Block until any coroutine has finished. It is returned. NULl,
+ * Block until any coroutine has finished. It is returned. NULL,
  * if no coroutines.
  */
 struct coro *
