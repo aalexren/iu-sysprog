@@ -7,8 +7,13 @@ me_merge(int *array, int lhs, int mid, int rhs) {
     int lsize = mid - lhs + 1;
     int rsize = rhs - mid;
 
-    int larr[lsize];
-    int rarr[rsize];
+    int *larr = (int *)calloc(lsize, sizeof(int));
+    int *rarr = (int *)calloc(rsize, sizeof(int));
+
+    if (larr == NULL || rarr == NULL) {
+        printf("Can't allocate memory at me_merge!");
+        exit(-1);
+    }
 
     for (int i = 0; i < lsize; ++i) {
         larr[i] = array[lhs + i];
@@ -41,6 +46,9 @@ me_merge(int *array, int lhs, int mid, int rhs) {
         j++;
         k++;
     }
+
+    free(rarr);
+    free(larr);
 }
 
 static void
@@ -54,134 +62,191 @@ me_mergesort(int *array, int lhs, int rhs)
     }
 }
 
-// static void
-// read_file(const char *fname, int **ret_array, size_t *ret_size)
-// {
-//     FILE* file;
+
+/**
+ * @brief Read file and returns number of scanned numbers.
+ * 
+ * @param fname file name to read from
+ * @param array array to save numbers
+ * @return int number of scanned numbers
+ */
+static int
+read_file(char *fname, int **array)
+{
+    FILE *file = fopen(fname, "r");
+    if (file == NULL) {
+        printf("Can't open file %s at read_file!", fname);
+    }
+
+    /* Make temporary array to read in numbers. */
+    int *temp = (int *)calloc(1, sizeof(int));
+    /* Assuming length of array. */
+    int count = 0;
+    /* Size of allocated memory. */
+    int allocated = 1;
+
+    for (int i = 0; ;++i) {
+        /* Read number to array cell. */
+        int status = fscanf(file, "%d", &temp[i]);
+        if (status == EOF) {
+            break;
+        }
+        count += 1;
+        /* Increase memory block twice if needed. */
+        if (count == allocated) {
+            allocated = allocated * 2;
+            int *new_temp = (int *)realloc(temp, sizeof(int) * allocated);
+            if (new_temp == NULL) {
+                printf("Can't re-allocate memory at scan_file!");
+                exit(-1);
+            }
+            else {
+                temp = new_temp;
+            }
+        }
+    }
+
+    int *new_temp = (int *)realloc(temp, sizeof(int) * count);
+    if (new_temp == NULL) {
+        printf("Can't re-allocate memory at scan_file!");
+        exit(-1);
+    }
+    else {
+        temp = new_temp;
+    }
     
-//     if ((file = fopen(fname, "r")) == NULL) {
-//         printf("Can't open file.");
-//         exit(-1);
-//     }
+    /* Save numbers to passed array. */
+    *array = temp;
 
-//     *ret_array = (int *)malloc(sizeof(int) * 2);
-//     size_t free_cells = 2;
-//     if (*ret_array == NULL) {
-//         printf("Can't allocate memory.");
-//         exit(-1);
-//     }
+    /* Do not forget to close file. */
+    fclose(file);
 
-//     for (int i = 0; fscanf(file, "%d", &(*ret_array)[i]) != EOF; i++) {
-//         if (free_cells / 2 <= i) {
-//             if (realloc(*ret_array, sizeof(free_cells * 2)) == NULL) {
-//                 printf("Can't reallocate memory.");
-//                 free(*ret_array);
-//                 exit(-1);
-//             }
-//             free_cells *= 2;
-//         }
-//         (*ret_size)++;
-//     }
+    return count;
+}
 
-//     /* Print to debug */
-//     // for (int i = 0; i < *ret_size; ++i) {
-//     //     printf("%d\n", (*ret_array)[i]);
-//     // }
-//     // printf("Length of array: %zu, Size of array: %zu\n", *ret_size, free_cells);
-    
-//     fclose(file);
-// }
+/**
+ * @brief Write numbers in sorted order into file.
+ * 
+ * @param fname file name
+ * @param array 2D array with numbers
+ * @param sizes 1D array with lengths of rows
+ * @param size length of 1D array
+ */
+static void
+write_result_to_file(char *fname, int **array, int *sizes, int size)
+{
+    FILE *file = fopen(fname, "w");
+    if (file == NULL) {
+        printf("Can't open file %s at read_file!", fname);
+    }
 
-// static int*
-// read_file(const char *fname, size_t *ret_size)
-// {
-//     FILE* file;
+    /**
+     * We will decrease size every time when one of counter becomes 0.
+     * Since it zero means we wrote all numbers.
+     * Hence, we don't need count total number of numbers.
+     */
+    int zeros = size;
 
-//     if ((file = fopen(fname, "r")) == NULL) {
-//         printf("Can't open file.");
-//         exit(-1);
-//     }
+    int *iters = (int *)calloc(size, sizeof(int));
+    if (iters == NULL) {
+        printf("Can't allocate memory at write_result_to_file!");
+        exit(-1);
+    }
 
-//     size_t free_cells = 2;
-//     int *ret_array = calloc(free_cells, sizeof(int));
-//     if (ret_array == NULL) {
-//         printf("Can't allocate memory.");
-//         exit(-1);
-//     }
+    int min = array[0][0];
+    for (; zeros > 0; ) {
+        int min_idx = -1;
 
-//     for (int i = 0; fscanf(file, "%d", &ret_array[i]) != EOF; i++) {
-//         // if (free_cells / 2 <= i) {
-//         //     free_cells *= 2;
-//         //     if (realloc(ret_array, sizeof(int) * free_cells) == NULL) {
-//         //         printf("Can't reallocate memory.");
-//         //         free(ret_array);
-//         //         exit(-1);
-//         //     }
-//         // }
-//         (*ret_size)++;
-//     }
+        /* Take first available to find minimum. */
+        for (int i = 0; i < size; ++i) {
+            if (iters[i] < sizes[i]) {
+                min = array[i][iters[i]];
+                min_idx = i;
+            }
+        }
+        if (min_idx == -1) {
+            break;
+        }
+        for (int i = 0; i < size; ++i) {
+            /**
+             * Check with all available (we didn't pass)
+             * first values in every row.
+             */
+            if (iters[i] < sizes[i] && min > array[i][iters[i]]) {
+                min = array[i][iters[i]];
+                min_idx = i;
+            }
+        }
+        iters[min_idx] += 1;
 
-//     fclose(file);
+        /* If no numbers left for this row decrease number of total available rows. */
+        if (iters[min_idx] >= sizes[min_idx]) {
+            zeros -= 1;
+        }
 
-//     return ret_array;
-// }
+        /* Write number to file. */
+        fprintf(file, "%d ", min);
+    }
+
+    free(iters);
+    fclose(file);
+}
+
+/**
+ * @brief Print 2D array.
+ * 
+ * @param array 2D array to print
+ * @param sizes 1D array with lengths of rows
+ * @param size length of 1D array
+ */
+static void
+print2d(int **array, int *sizes, int size)
+{
+    printf("\n");
+    for (int i = 0; i < size; ++i) {
+        for (int j = 0; j < sizes[i]; j += 976) {
+            printf("%d ", array[i][j]);
+        }
+        printf("\n------------------\n");
+    }
+    printf("\n");
+}
 
 int
 main(int argc, char **argv)
 {
-    argc = 3;
-    int **nums = (int **)calloc(argc - 1, sizeof(int*));
-    printf("I'm working....%d\n", argc);
-    char *argvv[] = {
-        "./main.o",
-        "test1.txt",
-        "test2.txt"
-    };
-    nums[0] = *nums;
-    nums[1] = *(nums + 1);
+    /* Number of files have to be sorted. */
+    int files_count = argc - 1;
+    /* 2D array: file <-> corresponding numbers. */
+    int **numbers = (int **)calloc(files_count, sizeof(int *));
+    /* Array with count of numbers for every file. */
+    int *c_numbers = (int *)calloc(files_count, sizeof(int));
+    /* Destination file name. */
+    char *dest_file = "output.txt";
 
-    printf("Address of variable on the stack (get by &<name>): ");
-    printf("%p\n", &nums);
-    printf("Value that stores in that variable (get by <name>): ");
-    printf("%p\n", nums);
-    printf("Value that we can obtain by this address in heap (get by *<name>): ");
-    printf("%p\n", *nums);
-
-    size_t count = 0;
-    for (int i = 0; i < argc - 1; ++i) {
-        printf("I'm working in the loop %d...\n", i);
-        // read_file(argv[i + 1], &(nums[i]), &count);
-        nums[i] = read_file(argvv[i + 1], &count);
-        printf("Address of variable on the stack (get by &<name>): ");
-        printf("%p\n", &nums);
-        printf("Value that stores in that variable (get by <name>): ");
-        printf("%p\n", nums);
-        printf("Value that we can obtain by this address in heap (get by *<name>): ");
-        printf("%p\n", *(nums[i]));
-
-        printf("%zu\n", count);
-        // me_mergesort(nums[i], 0, count - 1);
-        printf("-----------------\n");
-        for (int j = 0; j < count; ++j) {
-            printf("%d\n", nums[i][j]);
-        }
-        count = 0;
+    /* Read files and save numbers to 2D array. */
+    for (int i = 0; i < files_count; ++i) {
+        printf("Pointer before memory allocation: %p\n", numbers[i]);
+        c_numbers[i] = read_file(argv[i + 1], &numbers[i]);
+        printf("Number of numbers in %s: %d\n", argv[i + 1], c_numbers[i]);
+        me_mergesort(numbers[i], 0, c_numbers[i] - 1);
+        printf("Pointer after memory allocation: %p\n", numbers[i]);
     }
 
-    // int *nums = NULL;
-    // read_file("test1.txt", &nums, &count);
+    /* Check if everything is ok. */
+    print2d(numbers, c_numbers, files_count);
 
-    // me_mergesort(nums, 0, count - 1);
+    /* Merge to one file. */
+    write_result_to_file(dest_file, numbers, c_numbers, files_count);
     
-    // for (int i = 0; i < count; ++i) {
-    //     printf("%d\n", nums[i]);
-    // }
-
-    // printf("%zu", *nums);
-    // for (int i = 0; i < argc - 1; ++i) {
-    //     free(nums[i]);
-    // }
-    // free(nums);
+    /* Do not forget to free allocated memory. */
+    for (int i = 0; i < files_count; ++i) {
+        if (numbers[i] != NULL) {
+            free(numbers[i]);
+        }
+    }
+    free(numbers);
+    free(c_numbers);
 
     return 0;
 }
