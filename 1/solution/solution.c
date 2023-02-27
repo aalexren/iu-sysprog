@@ -4,17 +4,26 @@
 #include <time.h>
 #include "libcoro.h"
 
-struct merge_args {
+static int
+read_file(char *fname, int **array);
+
+struct coro_args {
     int *array;
+    int *c_array;
     int lhs;
     int rhs;
+    long long switch_count;
     char *coro_name;
+    char* path;
+
+    clock_t summary_time;
+    clock_t last_execution_time;
 };
 
 static void
-me_merge(int *array, int lhs, int mid, int rhs, char *name) {
+me_merge(int *array, int lhs, int mid, int rhs, char *name, struct coro_args* args) {
+    clock_t t_temp = clock();
     struct coro *this = coro_this();
-    // char *name = coro_name;
     
     int lsize = mid - lhs + 1;
     int rsize = rhs - mid;
@@ -27,20 +36,14 @@ me_merge(int *array, int lhs, int mid, int rhs, char *name) {
         exit(-1);
     }
 
-    // printf("%s: yield\n", name);
-    // coro_yield();
-
     for (int i = 0; i < lsize; ++i) {
         larr[i] = array[lhs + i];
     }
-    // printf("%s: yield\n", name);
-    // coro_yield();
+
     for (int i = 0; i < rsize; ++i) {
         rarr[i] = array[mid + i + 1];
     }
 
-    // printf("%s: yield\n", name);
-    // coro_yield();
     int i = 0, j = 0, k = lhs;
     while (i < lsize && j < rsize) {
         if (larr[i] < rarr[j]) {
@@ -54,16 +57,12 @@ me_merge(int *array, int lhs, int mid, int rhs, char *name) {
         k++;
     }
 
-    // printf("%s: yield\n", name);
-    // coro_yield();
     while (i < lsize) {
         array[k] = larr[i];
         i++;
         k++;
     }
     
-    // printf("%s: yield\n", name);
-    // coro_yield();
     while (j < rsize) {
         array[k] = rarr[j];
         j++;
@@ -72,25 +71,27 @@ me_merge(int *array, int lhs, int mid, int rhs, char *name) {
 
     free(rarr);
     free(larr);
+
+    args->summary_time += clock() - t_temp;
 }
 
 static void
-me_mergesort(int *array, int lhs, int rhs, char *name)
+me_mergesort(int *array, int lhs, int rhs, char *name, struct coro_args* args)
 {
     struct coro *this = coro_this();
-    // char *name = coro_name;
     
     if (lhs < rhs) {
         int mid = (lhs + rhs) / 2;
-        // printf("%s: yield\n", name);
+        
         coro_yield();
-        me_mergesort(array, lhs, mid, name);
-        // printf("%s: yield\n", name);
+        me_mergesort(array, lhs, mid, name, args);
+        
         coro_yield();
-        me_mergesort(array, mid + 1, rhs, name);
-        // printf("%s: yield\n", name);
+        me_mergesort(array, mid + 1, rhs, name, args);
+        
         coro_yield();
-        me_merge(array, lhs, mid, rhs, name);
+        me_merge(array, lhs, mid, rhs, name, args);
+        args->switch_count = coro_switch_count(this);
     }
 }
 
@@ -98,13 +99,8 @@ static int
 intermediate(void *args)
 {
     struct coro *this = coro_this();
-    struct merge_args *temp = args;
-    // printf("Started coroutine %s\n", temp->coro_name);
-	// printf("%s: switch count %lld\n", temp->coro_name, coro_switch_count(this));
-    // printf("%s: yield\n", temp->coro_name);
-    coro_yield();
-    me_mergesort(temp->array, temp->lhs, temp->rhs, temp->coro_name);
-    free(temp);
+    struct coro_args *temp = args;
+    me_mergesort(temp->array, temp->lhs, temp->rhs, temp->coro_name, (struct coro_args *)args);
     return 0;
 }
 
@@ -278,7 +274,7 @@ main(int argc, char **argv)
 
     /* Initialize our coroutine global cooperative scheduler. */
 	coro_sched_init();
-    clock_t *coro_times = (clock_t *)calloc(files_count, sizeof(clock_t));
+    struct coro_args* coro_args_list[files_count];
 	/* Start several coroutines. */
 	for (int i = 0; i < files_count; ++i) {
 		/*
@@ -292,24 +288,19 @@ main(int argc, char **argv)
 		 * I have to copy the name. Otherwise all the coroutines would
 		 * have the same name when they finally start.
 		 */
-        struct merge_args *temp = (struct merge_args *)malloc(sizeof(*temp));
+        struct coro_args *temp = (struct coro_args *)malloc(sizeof(*temp));
         temp->array = numbers[i];
+        temp->c_array = &c_numbers[i];
         temp->lhs = 0;
         temp->rhs = c_numbers[i];
         temp->coro_name = strdup(name);
-        coro_times[i] = clock();
+        temp->path = argv[i + 1];
+        temp->last_execution_time = clock();
+        temp->summary_time = 0;
+        temp->switch_count = 0;
+        coro_args_list[i] = temp;
         coro_new(intermediate, temp);
-		// coro_new(coroutine_func_f, strdup(name));
 	}
-
-    // /* Read files and save numbers to 2D array. */
-    // for (int i = 0; i < files_count; ++i) {
-    //     printf("Pointer before memory allocation: %p\n", numbers[i]);
-    //     c_numbers[i] = read_file(argv[i + 1], &numbers[i]);
-    //     printf("Number of numbers in %s: %d\n", argv[i + 1], c_numbers[i]);
-    //     me_mergesort(numbers[i], 0, c_numbers[i] - 1);
-    //     printf("Pointer after memory allocation: %p\n", numbers[i]);
-    // }
     
 	/* Wait for all the coroutines to end. */
 	struct coro *c;
@@ -319,12 +310,16 @@ main(int argc, char **argv)
 		 * do anything you want. Like check its exit status, for
 		 * example. Don't forget to free the coroutine afterwards.
 		 */
-        printf("Time of coroutine execution: %f\n",
-                (double)(clock() - coro_times[i]) / CLOCKS_PER_SEC);
-        printf("Switch count %lld\n", coro_switch_count(c));
-		printf("Finished %d\n", coro_status(c));
 		coro_delete(c);
 	}
+
+    for (int i = 0; i < files_count; ++i) {
+        printf("Coro name: %s,\tSwitch count: %lld,\texeuction time in sec: %f\n", 
+                coro_args_list[i]->coro_name,
+                coro_args_list[i]->switch_count,
+                (double)coro_args_list[i]->summary_time / CLOCKS_PER_SEC
+        );
+    }
 	/* All coroutines have finished. */
 
     /* Check if everything is ok. */
@@ -341,7 +336,6 @@ main(int argc, char **argv)
     }
     free(numbers);
     free(c_numbers);
-    free(coro_times);
 
     clock_t end_time = clock();
 
