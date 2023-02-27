@@ -9,12 +9,10 @@ read_file(char *fname, int **array);
 
 struct coro_args {
     int *array;
-    int *c_array;
     int lhs;
     int rhs;
     long long switch_count;
     char *coro_name;
-    char* path;
 
     clock_t summary_time;
     clock_t last_execution_time;
@@ -23,7 +21,6 @@ struct coro_args {
 static void
 me_merge(int *array, int lhs, int mid, int rhs, char *name, struct coro_args* args) {
     clock_t t_temp = clock();
-    struct coro *this = coro_this();
     
     int lsize = mid - lhs + 1;
     int rsize = rhs - mid;
@@ -98,7 +95,6 @@ me_mergesort(int *array, int lhs, int rhs, char *name, struct coro_args* args)
 static int
 intermediate(void *args)
 {
-    struct coro *this = coro_this();
     struct coro_args *temp = args;
     me_mergesort(temp->array, temp->lhs, temp->rhs, temp->coro_name, (struct coro_args *)args);
     return 0;
@@ -240,18 +236,18 @@ write_result_to_file(char *fname, int **array, int *sizes, int size)
  * @param sizes 1D array with lengths of rows
  * @param size length of 1D array
  */
-static void
-print2d(int **array, int *sizes, int size)
-{
-    printf("\n");
-    for (int i = 0; i < size; ++i) {
-        for (int j = 0; j < sizes[i]; j += 976) {
-            printf("%d ", array[i][j]);
-        }
-        printf("\n------------------\n");
-    }
-    printf("\n");
-}
+// static void
+// print2d(int **array, int *sizes, int size)
+// {
+//     printf("\n");
+//     for (int i = 0; i < size; ++i) {
+//         for (int j = 0; j < sizes[i]; j += 976) {
+//             printf("%d ", array[i][j]);
+//         }
+//         printf("\n------------------\n");
+//     }
+//     printf("\n");
+// }
 
 int
 main(int argc, char **argv)
@@ -290,11 +286,9 @@ main(int argc, char **argv)
 		 */
         struct coro_args *temp = (struct coro_args *)malloc(sizeof(*temp));
         temp->array = numbers[i];
-        temp->c_array = &c_numbers[i];
         temp->lhs = 0;
         temp->rhs = c_numbers[i];
         temp->coro_name = strdup(name);
-        temp->path = argv[i + 1];
         temp->last_execution_time = clock();
         temp->summary_time = 0;
         temp->switch_count = 0;
@@ -304,7 +298,7 @@ main(int argc, char **argv)
     
 	/* Wait for all the coroutines to end. */
 	struct coro *c;
-	for (int i = 0; (c = coro_sched_wait()) != NULL;) {
+	for (; (c = coro_sched_wait()) != NULL;) {
 		/*
 		 * Each 'wait' returns a finished coroutine with which you can
 		 * do anything you want. Like check its exit status, for
@@ -313,12 +307,15 @@ main(int argc, char **argv)
 		coro_delete(c);
 	}
 
+    /* Print results and free memory. */
     for (int i = 0; i < files_count; ++i) {
-        printf("Coro name: %s,\tSwitch count: %lld,\texeuction time in sec: %f\n", 
+        printf("Coro name: %s,\tSwitch count: %lld,\texeuction time in micro sec: %lu\n", 
                 coro_args_list[i]->coro_name,
                 coro_args_list[i]->switch_count,
-                (double)coro_args_list[i]->summary_time / CLOCKS_PER_SEC
+                coro_args_list[i]->summary_time
         );
+        free(coro_args_list[i]->coro_name);
+        free(coro_args_list[i]);
     }
 	/* All coroutines have finished. */
 
@@ -339,8 +336,8 @@ main(int argc, char **argv)
 
     clock_t end_time = clock();
 
-    printf("Total time of program execution: %f sec\n", 
-            (double)(end_time - start_time) / CLOCKS_PER_SEC);
+    printf("Total time of program execution: %lu micro sec\n", 
+            end_time - start_time);
 
     return 0;
 }
