@@ -4,8 +4,6 @@
 #include <time.h>
 #include "libcoro.h"
 
-static int
-read_file(char *fname, int **array);
 
 struct coro_args {
     int *array;
