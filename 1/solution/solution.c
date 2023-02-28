@@ -13,7 +13,6 @@ struct coro_args {
     char *coro_name;
 
     clock_t summary_time;
-    clock_t last_execution_time;
 };
 
 static void
