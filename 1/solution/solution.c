@@ -137,9 +137,7 @@ read_file(char *fname, int **array)
                 printf("Can't re-allocate memory at scan_file!");
                 exit(-1);
             }
-            else {
-                temp = new_temp;
-            }
+            temp = new_temp;
         }
     }
 
@@ -289,7 +287,6 @@ main(int argc, char **argv)
         temp->lhs = 0;
         temp->rhs = c_numbers[i];
         temp->coro_name = strdup(name);
-        temp->last_execution_time = clock();
         temp->summary_time = 0;
         temp->switch_count = 0;
         coro_args_list[i] = temp;
