@@ -9,8 +9,21 @@ const int CORO_COUNT = 6;
 /* BLOCK CONSTANTS */
 
 /* BLOCK PREDEFINED */
+struct coro_args {
+    char *coro_name;
+    long long switch_count;
+
+    int **array;
+    int array_length;
+    struct coro_file **files;
+    int files_length;
+    int *arrays_length; // keeps length of every read array
+    
+    clock_t summary_time;
+};
+
 static int
-read_file(char *fname, int **array);
+read_file(char *fname, int **array, struct coro_args* args);
 
 // static void
 // print2d(int **array, int *sizes, int size);
@@ -34,19 +47,6 @@ struct coro_file* get_file(struct coro_file** files, int size)
 
     return NULL;
 }
-
-struct coro_args {
-    char *coro_name;
-    long long switch_count;
-
-    int **array;
-    int array_length;
-    struct coro_file **files;
-    int files_length;
-    int *arrays_length; // keeps length of every read array
-    
-    clock_t summary_time;
-};
 
 static void
 me_merge(int *array, int lhs, int mid, int rhs, char *name, struct coro_args* args) {
@@ -135,11 +135,11 @@ intermediate(void *args)
         }
         file->processed = true;
         printf("Reading file by %s...\n", temp->coro_name);
-        int array_len = read_file(file->name, &temp->array[file->index]);
+        int array_len = read_file(file->name, &temp->array[file->index], temp);
         temp->arrays_length[file->index] = array_len;
         coro_yield();
         printf("Sorting file by %s...\n", temp->coro_name);
-        me_mergesort(temp->array[file->index], 0, array_len, temp->coro_name, (struct coro_args *)args);
+        me_mergesort(temp->array[file->index], 0, array_len, temp->coro_name, temp);
         printf("Get next file by %s...\n", temp->coro_name);
     }
     return 0;
@@ -153,8 +153,10 @@ intermediate(void *args)
  * @return int number of scanned numbers
  */
 static int
-read_file(char *fname, int **array)
+read_file(char *fname, int **array, struct coro_args* args)
 {
+    clock_t t_temp = clock();
+
     FILE *file = fopen(fname, "r");
     if (file == NULL) {
         printf("Can't open file %s at read_file!", fname);
@@ -201,6 +203,7 @@ read_file(char *fname, int **array)
     /* Do not forget to close file. */
     fclose(file);
 
+    args->summary_time += clock() - t_temp;
     return count;
 }
 
