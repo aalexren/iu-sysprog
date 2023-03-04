@@ -4,14 +4,47 @@
 #include <time.h>
 #include "libcoro.h"
 
+/* BLOCK CONSTANTS */
+const int CORO_COUNT = 6;
+/* BLOCK CONSTANTS */
+
+/* BLOCK PREDEFINED */
+static int
+read_file(char *fname, int **array);
+
+// static void
+// print2d(int **array, int *sizes, int size);
+/* BLOCK PREDEFINED */
+
+/* Struct to keep information if file was locked and performed by coroutine. */
+struct coro_file {
+    char *name;
+    bool processed;
+    int index;
+};
+
+/* Get any available file to process by coroutine. */
+struct coro_file* get_file(struct coro_file** files, int size)
+{
+    for(int i = 0; i < size; ++i) {
+        if (!files[i]->processed) {
+            return files[i];
+        }
+    }
+
+    return NULL;
+}
 
 struct coro_args {
-    int *array;
-    int lhs;
-    int rhs;
-    long long switch_count;
     char *coro_name;
+    long long switch_count;
 
+    int **array;
+    int array_length;
+    struct coro_file **files;
+    int files_length;
+    int *arrays_length; // keeps length of every read array
+    
     clock_t summary_time;
 };
 
@@ -93,7 +126,22 @@ static int
 intermediate(void *args)
 {
     struct coro_args *temp = args;
-    me_mergesort(temp->array, temp->lhs, temp->rhs, temp->coro_name, (struct coro_args *)args);
+    printf("Start coroutine %s\n", temp->coro_name);
+    for(;;) {
+        struct coro_file* file = get_file(temp->files, temp->files_length);
+        if (file == NULL) {
+            printf("Exit %s\n", temp->coro_name);
+            break;
+        }
+        file->processed = true;
+        printf("Reading file by %s...\n", temp->coro_name);
+        int array_len = read_file(file->name, &temp->array[file->index]);
+        temp->arrays_length[file->index] = array_len;
+        coro_yield();
+        printf("Sorting file by %s...\n", temp->coro_name);
+        me_mergesort(temp->array[file->index], 0, array_len, temp->coro_name, (struct coro_args *)args);
+        printf("Get next file by %s...\n", temp->coro_name);
+    }
     return 0;
 }
 
@@ -251,6 +299,13 @@ main(int argc, char **argv)
 
     /* Number of files have to be sorted. */
     int files_count = argc - 1;
+    /* Read number of coroutines should be started. */
+    int coro_param = CORO_COUNT;
+    if (argc >= 3 && strcmp(argv[1], "-c") == 0) {
+        coro_param = atoi(argv[2]);
+        files_count -= 2;
+    }
+
     /* 2D array: file <-> corresponding numbers. */
     int **numbers = (int **)calloc(files_count, sizeof(int *));
     /* Array with count of numbers for every file. */
@@ -258,16 +313,22 @@ main(int argc, char **argv)
     /* Destination file name. */
     char *dest_file = "output.txt";
 
-    /* Read files and save numbers to 2D array. */
+    printf("Files count: %d\n", files_count);
+    struct coro_file **coro_files = (struct coro_file**)calloc(files_count, sizeof(struct coro_file*));
     for (int i = 0; i < files_count; ++i) {
-        c_numbers[i] = read_file(argv[i + 1], &numbers[i]);
+        int start_idx = argc - files_count;
+        struct coro_file* f = (struct coro_file*)malloc(sizeof(struct coro_file));
+        f->name = strdup(argv[start_idx + i]);
+        f->processed = false;
+        f->index = i;
+        coro_files[i] = f;
     }
 
     /* Initialize our coroutine global cooperative scheduler. */
 	coro_sched_init();
-    struct coro_args* coro_args_list[files_count];
+    struct coro_args* coro_args_list[coro_param];
 	/* Start several coroutines. */
-	for (int i = 0; i < files_count; ++i) {
+	for (int i = 0; i < coro_param; ++i) {
 		/*
 		 * The coroutines can take any 'void *' interpretation of which
 		 * depends on what you want. Here as an example I give them
@@ -280,16 +341,18 @@ main(int argc, char **argv)
 		 * have the same name when they finally start.
 		 */
         struct coro_args *temp = (struct coro_args *)malloc(sizeof(*temp));
-        temp->array = numbers[i];
-        temp->lhs = 0;
-        temp->rhs = c_numbers[i];
+        temp->array = numbers;
+        temp->array_length = files_count;
+        temp->files = coro_files;
+        temp->files_length = files_count;
+        temp->arrays_length = c_numbers;
         temp->coro_name = strdup(name);
         temp->summary_time = 0;
         temp->switch_count = 0;
         coro_args_list[i] = temp;
         coro_new(intermediate, temp);
 	}
-    
+
 	/* Wait for all the coroutines to end. */
 	struct coro *c;
 	for (; (c = coro_sched_wait()) != NULL;) {
@@ -301,8 +364,9 @@ main(int argc, char **argv)
 		coro_delete(c);
 	}
 
+    
     /* Print results and free memory. */
-    for (int i = 0; i < files_count; ++i) {
+    for (int i = 0; i < coro_param; ++i) {
         printf("Coro name: %s,\tSwitch count: %lld,\texeuction time in micro sec: %lu\n", 
                 coro_args_list[i]->coro_name,
                 coro_args_list[i]->switch_count,
@@ -324,9 +388,12 @@ main(int argc, char **argv)
         if (numbers[i] != NULL) {
             free(numbers[i]);
         }
+        free(coro_files[i]->name);
+        free(coro_files[i]);
     }
     free(numbers);
     free(c_numbers);
+    free(coro_files);
 
     clock_t end_time = clock();
 
