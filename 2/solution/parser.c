@@ -3,6 +3,7 @@
 #include <string.h>
 #include <errno.h>
 #include "parser.h"
+#include "stack.h"
 
 int 
 is_eof(char next)
