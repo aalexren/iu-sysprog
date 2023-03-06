@@ -10,6 +10,6 @@ int cs_isempty(struct char_stack *stack);
 
 char cs_peek(struct char_stack *stack);
 
-char cs_pop(struct char_stack *stack);
+void cs_pop(struct char_stack *stack);
 
 void cs_print(struct char_stack *stack);

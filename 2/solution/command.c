@@ -6,7 +6,7 @@
 #include "command.h"
 
 struct cmd *
-parse_line(char *line)
+parse_cmds(char *line)
 {
     int index = 0;
     size_t len = strlen(line);

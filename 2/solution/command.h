@@ -8,4 +8,4 @@ struct cmd {
  * Parse line to find all commands and their arguments.
  * Commands separated by |, && and ||.
  */
-struct cmd *parse_line(char *line);
+struct cmd *parse_cmds(char *line);

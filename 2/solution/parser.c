@@ -5,6 +5,9 @@
 #include "parser.h"
 #include "stack.h"
 
+#define true 1
+#define false 0
+
 int 
 is_eof(char next)
 { 
@@ -23,44 +26,153 @@ is_eol(char next, char prev)
 }
 
 char *
+parse_line(char *rs)
+{
+    struct char_stack* stack = cs_init();
+    size_t rs_len = strlen(rs);
+    char *s = (char *)malloc(sizeof(char) * rs_len);
+    size_t s_idx = 0;
+
+    int single_quote = false; // opened single quote -> literal meaning
+    int double_quote = false; // opened double quote -> with respect to '\'
+
+    for (size_t idx = 0; idx < rs_len; ++idx)
+    {
+        /* Found enclosing single quote. Wait for the second one. */
+        if (!single_quote && !double_quote && rs[idx] == '\'')
+        {
+            single_quote = true;
+            continue;
+        }
+        if (single_quote && !double_quote && rs[idx] != '\'')
+        {
+            s[s_idx++] = rs[idx];
+            continue;
+        }
+        if (single_quote && !double_quote && rs[idx] == '\'')
+        {
+            single_quote = false;
+            continue;
+        }
+        /* Found enclosing double quote. Wait for the second one. 
+         * Pay respect to \ character. */
+        if (!single_quote && !double_quote && rs[idx] == '\"')
+        {
+            double_quote = true;
+            continue;
+        }
+        if (!single_quote && double_quote && rs[idx] == '\"' && cs_isempty(stack))
+        {
+            double_quote = false;
+            continue;
+        }
+        if (!single_quote && double_quote && rs[idx] == '\\' && cs_isempty(stack))
+        {
+            cs_push(stack, '\\');   
+            continue;
+        }
+        if (!single_quote && double_quote && rs[idx] != '\\' && cs_isempty(stack))
+        {
+            s[s_idx++] = rs[idx];
+            continue;
+        }
+        if (!single_quote && double_quote && !cs_isempty(stack))
+        {
+            if (rs[idx] == '\n' && cs_peek(stack) == '\\')
+            {
+                /**
+                 * with enclosing ": '\' + '\n' => ''
+                 * $> echo "123
+                 *      456\
+                 *      678"
+                 * 123
+                 * 456678
+                 */
+                cs_pop(stack);
+            }
+            else if (rs[idx] == '\\' && cs_peek(stack) == '\\') 
+            {
+                cs_pop(stack);
+                s[s_idx++] = '\\';
+            }
+            else if (rs[idx] == '\"' && cs_peek(stack) == '\\')
+            {
+                cs_pop(stack);
+                s[s_idx++] = '\"';
+            }
+            else if (rs[idx] == 'n' && cs_peek(stack) == '\\')
+            {
+                cs_pop(stack);
+                s[s_idx++] = '\n';
+            }
+            else if (rs[idx] == 't' && cs_peek(stack) == '\\')
+            {
+                cs_pop(stack);
+                s[s_idx++] = '\t';
+            }
+            else if (rs[idx] == 'r' && cs_peek(stack) == '\\')
+            {
+                cs_pop(stack);
+                s[s_idx++] = '\r';
+            }
+            else {
+                s[s_idx++] = cs_peek(stack);
+                cs_pop(stack);
+                s[s_idx++] = rs[idx];
+            }
+            continue;
+        }
+        /* Non-quoted \ preserve literal value of next character. */
+        if (!single_quote && !double_quote && rs[idx] == '\\')
+        {
+            cs_push(stack, rs[idx]);
+            continue;
+        }
+        if (!single_quote && !double_quote && rs[idx] == '\n')
+        {
+            if (!cs_isempty(stack) && cs_peek(stack) == '\\')
+            {
+                cs_pop(stack);
+            }
+            continue;
+        }
+        /* Non-quoted, without \ character. */
+        if (!single_quote && !double_quote && rs[idx] != '\\')
+        {
+            s[s_idx++] = rs[idx];
+            continue;
+        }
+    }
+    s[s_idx] = '\0';
+
+    free(stack);
+    return s;
+}
+
+char *
 read_line()
 {
-    // TODO
-    /**
-     * Идём по строке, далее:
-     * 0. Итерируемся по строке -> шаг 1
-     * 1. Видим \, идём на шаг 2, иначе на шаг 4
-     * 2. Кладём \ в стек, идём на шаг 3
-     * 3. Далее видим escape символы, кроме `n`, напр. " или ' -> 
-     *    вытаскиваем из стека \ и добавляем к строке \" или \' и т.д.
-     *    если видим `n`, просто убираем из стека \ -> на шаг 0
-     * 4. Видим " или ' -> на шаг 5, иначе на шаг 6
-     * 5. Если стек пустой, кладём туда кавычку и дальше идём по строке -> на шаг 0
-     *    Если стек содержит парную кавычку, то удаляем первую из стека -> на шаг 0
-     *    Если лежит \, то убираем его из стека и к строке добавляем escape character -> на шаг 0
-     * 6. Видим всё остальное, значит просто добавляем к строке -> на шаг 0
-     */
     int index = 0;
     int size = 128;
     char *raw_line = calloc(size, sizeof(char));
     char prev = 's', next = 's';
+
+    int double_quote = false;
     for (;;)
     {
         next = getc(stdin);
-        if (is_eof(next)) break;
-        if (is_eol(next, prev)) break;
+        if (double_quote && next == '\"')
+        {
+            double_quote = false;
+        }
+        else if (!double_quote && next == '\"') 
+        {
+            double_quote = true;
+        }
+        else if (is_eof(next)) break;
+        else if (is_eol(next, prev) && !double_quote) break;
 
-        // if (prev == '\\' && next == '"')
-        // {
-        //     raw_line[--index] = '\"';
-        // }
-        // if (prev == '\\' && next == '\'')
-        // {
-        //     raw_line[--index] == '\'';
-        // }
-        // if (prev == '')
-
-        if (index == size) {
+        if (index - 1 == size) {
             size *= 2;
             raw_line = realloc(raw_line, sizeof(char) * size);
             if (raw_line == NULL) {
@@ -73,6 +185,5 @@ read_line()
     }
     raw_line[index++] = '\0';
 
-    // TODO
     return raw_line;
 }

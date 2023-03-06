@@ -19,3 +19,9 @@ int is_eol(char next, char prev);
  * Memory allocated here should be freed!
  */
 char* read_line();
+
+/**
+ * https://docs.python.org/3/library/shlex.html#parsing-rules
+ * Operating in POSIX mode.
+ */
+char * parse_line(char *rs);
