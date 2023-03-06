@@ -172,6 +172,7 @@ read_line()
         else if (is_eof(next)) break;
         else if (is_eol(next, prev) && !double_quote) break;
 
+        // -1 just in case :-)
         if (index - 1 == size) {
             size *= 2;
             raw_line = realloc(raw_line, sizeof(char) * size);
