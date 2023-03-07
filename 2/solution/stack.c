@@ -50,6 +50,51 @@ cs_pop(struct char_stack *stack)
     free(node);
 }
 
+char *
+cs_splice(struct char_stack *stack)
+{
+    size_t len = 0;
+    struct char_node *pntr = stack->top;
+    while (pntr != NULL)
+    {
+        len++;
+        pntr = pntr->next;
+    }
+
+    pntr = stack->top;
+    char *ret = malloc(sizeof(char) * len);
+    for (size_t i = 0; i < len; ++i)
+    {
+        ret[i] = pntr->data;
+        pntr = pntr->next;
+    }
+
+    return ret;
+}
+
+struct char_stack*
+cs_reverse(const struct char_stack *stack)
+{
+    struct char_stack *temp = cs_init();
+    struct char_node *pntr = stack->top;
+    while (pntr != NULL)
+    {
+        cs_push(temp, pntr->data);
+        pntr = pntr->next;
+    }
+
+    return temp;
+}
+
+void 
+cs_free(struct char_stack *stack)
+{
+    while (!cs_isempty(stack))
+    {
+        cs_pop(stack);
+    }
+}
+
 void
 cs_print(struct char_stack *stack)
 {
