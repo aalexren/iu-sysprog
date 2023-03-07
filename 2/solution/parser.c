@@ -1,3 +1,14 @@
+/**
+ * @file parser.c
+ * @author Artyom Chernitsa
+ * @brief List of ASCII codes: https://web.itu.edu.tr/~sgunduz/courses/mikroisl/ascii.html
+ * @version 0.1
+ * @date 2023-03-08
+ * 
+ * @copyright Copyright (c) 2023
+ * 
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -29,9 +40,6 @@ is_eol(char next, char prev)
 struct pair *
 parse_line(char *rs)
 {
-    // TODO: don't recognize arguments and 
-    // several command out of enclosing quotes
-    // e.g.: mv my\ name\ 1.txt my\ name\ 2.txt
     struct char_stack* stack = cs_init();
     struct char_stack* wstack = cs_init(); /* stack for single word */
     size_t len = strlen(rs);
