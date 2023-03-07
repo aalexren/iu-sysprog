@@ -4,19 +4,53 @@
 #include <string.h>
 #include <stdlib.h>
 #include "parser.h"
-// #include "command.h"
+#include "command.h"
 #include "stack.h"
+#include "pair.h"
 
-char const str[245] = "keks";
 
 int main(int argc, char **argv)
 {
+    // printf("%s", read_line());
+    // return 0;
+    struct pair *p_ = parse_line(read_line());
+    // struct pair *p_ = parse_line("echo 123\x20'123'\\\"456\\\"");
+    // struct pair *p_ = parse_line("mv my\\ name\\ 1.txt my\\ name\\ 2.txt");
+    int len = *(int*)snd_pair(p_);
+    char **args = (char**)fst_pair(p_);
+    printf("number of args: %d\n", len);
+    for (int i = 0; i < len; ++i)
+    {
+        printf("%s\n", args[i]);
+    }
+    // printf("%s, %d", ((char**)fst_pair(p_))[0], *(int*)snd_pair(p_));
+
+    return 0;
+    char *keks[] = {"echo", "dzin", NULL};
+    int a = 10;
+    struct pair* p = make_pair(keks, &a);
+    printf("%s, %d", ((char**)fst_pair(p))[0], *(int*)snd_pair(p));
+    return 0;
+    struct cmd **cmds = parse_cmds("echo \x7 123 \x7 > \x7 456 \x7");
+    cmd_print(cmds[0]);
+    // cmd_print(cmds[1]);
+
+    return 0;
+
+    struct char_stack* stack = cs_init();
+    cs_push(stack, 'a');
+    cs_push(stack, 'b');
+    cs_print(stack);
+    printf("%s", cs_splice(cs_reverse(stack)));
+    cs_free(stack);
+    printf("%d", cs_isempty(stack));
+    return 0;
     char *rs = read_line();
     printf("raw string:\t%s\n", rs);
     char *s = parse_line(rs);
     printf("parsed string:\t%s\n", s);
     
-    // return 0;
+    return 0;
     
     
     pid_t child = fork();

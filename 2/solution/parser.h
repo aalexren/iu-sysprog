@@ -1,3 +1,5 @@
+#include "pair.h"
+
 /**
  * Check if stream is set up to EOF,
  * returns 1 if true, 0 otherwise.
@@ -18,10 +20,12 @@ int is_eol(char next, char prev);
  * starting with \ to escape characters.
  * Memory allocated here should be freed!
  */
-char* read_line();
+char *read_line();
 
 /**
  * https://docs.python.org/3/library/shlex.html#parsing-rules
  * Operating in POSIX mode.
+ * 
+ * Returns pair consists of pointers to tokens and number of tokens.
  */
-char * parse_line(char *rs);
+struct pair *parse_line(char *rs);
