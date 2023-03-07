@@ -34,21 +34,6 @@ int main(int argc, char **argv)
     struct cmd **cmds = parse_cmds("echo \x7 123 \x7 > \x7 456 \x7");
     cmd_print(cmds[0]);
     // cmd_print(cmds[1]);
-
-    return 0;
-
-    struct char_stack* stack = cs_init();
-    cs_push(stack, 'a');
-    cs_push(stack, 'b');
-    cs_print(stack);
-    printf("%s", cs_splice(cs_reverse(stack)));
-    cs_free(stack);
-    printf("%d", cs_isempty(stack));
-    return 0;
-    char *rs = read_line();
-    printf("raw string:\t%s\n", rs);
-    char *s = parse_line(rs);
-    printf("parsed string:\t%s\n", s);
     
     return 0;
     

@@ -1,11 +1,11 @@
-struct cmd {
-    const char *name;
-    const char **argv;
-    int argc;
-};
+#include "pair.h"
+
+struct cmd;
 
 /**
  * Parse line to find all commands and their arguments.
  * Commands separated by |, && and ||.
  */
-struct cmd *parse_cmds(char *line);
+struct cmd **parse_cmds(struct pair* args);
+
+void cmd_print(struct cmd* cmd_);

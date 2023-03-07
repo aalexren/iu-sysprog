@@ -4,34 +4,30 @@
 #include <ctype.h>
 #include <stdio.h>
 #include "command.h"
+#include "stack.h"
+#include "pair.h"
 
-struct cmd *
-parse_cmds(char *line)
+#define true 1
+#define false 0
+
+struct cmd {
+    char *name;
+    char **argv;
+    int argc;
+};
+
+struct cmd **
+parse_cmds(struct pair* args)
 {
-    int index = 0;
-    size_t len = strlen(line);
+    return NULL;
+}
 
-    if (len == 1) {
-        // TODO
-    }
-
-    /** Firstly count how many commands do we have to
-     * allocate enough memory for list struct cmd *. */
-    size_t cmds_count = 0;
-    for (int i = 1; i < len; ++i) {
-        if (line[i-1] == '\\' && line[i] == '|') continue;
-
-    }
-    
-    /* Skip tabs, spaces etc. */
-    for (;index < len && isalpha(line[index]) == 0; index++) {}
-
-    size_t cmd_name_len = 0;
-    /* Find command name first. */
-    for (; index < len; index++)
+void 
+cmd_print(struct cmd* cmd_)
+{
+    printf("name: %s\argc: %d\n", cmd_->name, cmd_->argc);
+    for (int i = 0; i < cmd_->argc; ++i)
     {
-        if (isalpha(line[index])) cmd_name_len++;
-        else break;
+        printf("%d. %s\n", i, cmd_->argv[i]);
     }
-
 }
