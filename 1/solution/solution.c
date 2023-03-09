@@ -321,7 +321,7 @@ main(int argc, char **argv)
     for (int i = 0; i < files_count; ++i) {
         int start_idx = argc - files_count;
         struct coro_file* f = (struct coro_file*)malloc(sizeof(struct coro_file));
-        f->name = strdup(argv[start_idx + i]);
+        f->name = argv[start_idx + i];
         f->processed = false;
         f->index = i;
         coro_files[i] = f;
@@ -391,7 +391,6 @@ main(int argc, char **argv)
         if (numbers[i] != NULL) {
             free(numbers[i]);
         }
-        free(coro_files[i]->name);
         free(coro_files[i]);
     }
     free(numbers);
