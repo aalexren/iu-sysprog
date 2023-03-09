@@ -56,12 +56,6 @@ parse_line(char *rs)
     int double_quote = false; // opened double quote -> with respect to '\'
 
     size_t idx = 0;
-    // /* Skip first consecutive useless spaces and tabs. */
-    // for (; idx < len; ++idx)
-    // {
-    //     if (rs[idx] != ' ' || rs[idx] != '\t') break;
-    // }
-
     for (; idx < len; ++idx)
     {
         /* Skip first consecutive useless whitespaces. */
@@ -79,6 +73,12 @@ parse_line(char *rs)
         /* Pipe is a separate command. */
         if (!single_quote && !double_quote && rs[idx] == '|')
         {
+            /* || case command */
+            if (idx + 1 < len && rs[idx + 1] == '|')
+            {
+                cs_push(wstack, rs[idx]);
+                idx++;
+            }
             cs_push(wstack, rs[idx]);
             cs_push(wstack, '\0'); /* put end of line */
             argc++; /* increase number of recognized tokens */
@@ -91,7 +91,26 @@ parse_line(char *rs)
         /* Redirection is a separate command. */
         if (!single_quote && !double_quote && rs[idx] == '>')
         {
-            if (idx + 1 < len && rs[idx] == '>')
+            /* >> case command */
+            if (idx + 1 < len && rs[idx + 1] == '>')
+            {
+                cs_push(wstack, rs[idx]);
+                idx++;
+            }
+            cs_push(wstack, rs[idx]);
+            cs_push(wstack, '\0'); /* put end of line */
+            argc++; /* increase number of recognized tokens */
+            argv = realloc(argv, sizeof(char*) * argc); /* expand memory */
+            argv[argc - 1] = strdup(cs_splice(cs_reverse(wstack))); /* save token */
+            cs_free(wstack); /* clear stack */
+            continue;
+        }
+
+        /* Background is a separate command. */
+        if (!single_quote && !double_quote && rs[idx] == '&')
+        {
+            /* && case command */
+            if (idx + 1 < len && rs[idx + 1] == '&')
             {
                 cs_push(wstack, rs[idx]);
                 idx++;
@@ -115,7 +134,6 @@ parse_line(char *rs)
         /* With single quote flag enabled save all enclosed characters. */
         if (single_quote && !double_quote && rs[idx] != '\'')
         {
-            // s[s_idx++] = rs[idx];
             cs_push(wstack, rs[idx]);
             continue;
         }
@@ -162,7 +180,6 @@ parse_line(char *rs)
         /* Found common character with empty stack. Put character to word stack. */
         if (!single_quote && double_quote && rs[idx] != '\\' && cs_isempty(stack))
         {
-            // s[s_idx++] = rs[idx];
             cs_push(wstack, rs[idx]);
             continue;
         }
@@ -186,41 +203,34 @@ parse_line(char *rs)
             {
                 cs_pop(stack);
                 cs_push(wstack, '\\');
-                // s[s_idx++] = '\\';
             }
             else if (rs[idx] == '\"' && cs_peek(stack) == '\\')
             {
                 cs_pop(stack);
                 cs_push(wstack, '\"');
-                // s[s_idx++] = '\"';
             }
             else if (rs[idx] == 'n' && cs_peek(stack) == '\\')
             {
                 cs_pop(stack);
                 cs_push(wstack, '\n');
-                // s[s_idx++] = '\n';
             }
             else if (rs[idx] == 't' && cs_peek(stack) == '\\')
             {
                 cs_pop(stack);
                 cs_push(wstack, '\t');
-                // s[s_idx++] = '\t';
             }
             else if (rs[idx] == 'r' && cs_peek(stack) == '\\')
             {
                 cs_pop(stack);
                 cs_push(wstack, '\r');
-                // s[s_idx++] = '\r';
             }
             else {
                 /**
                  * $> echo "123\ 4"
                  * 123\ 4
                  */
-                // s[s_idx++] = cs_peek(stack);
                 cs_push(wstack, cs_peek(stack));
                 cs_pop(stack);
-                // s[s_idx++] = rs[idx];
                 cs_push(wstack, rs[idx]);
             }
             continue;
@@ -235,9 +245,8 @@ parse_line(char *rs)
          * $> ls
          * 123 567456 # one file, not two!!!
          */
-        if (!single_quote && !double_quote) //&& rs[idx] != '\\')
+        if (!single_quote && !double_quote)
         {
-            // s[s_idx++] = rs[idx];
             for (;idx < len && rs[idx] != ' ' && rs[idx] != '\t';)
             {
                 if (rs[idx] == '\\')
@@ -261,9 +270,13 @@ parse_line(char *rs)
                             idx--;
                             break;
                         }
+                        idx++;
+                        if (idx < len && rs[idx] == '|')
+                        {
+                            cs_push(wstack, rs[idx]);
+                        }
 
                         cs_push(wstack, rs[idx]);
-                        idx++;
                         break;
                     }
                     else if (idx < len && rs[idx] == '>')
@@ -275,6 +288,22 @@ parse_line(char *rs)
                         }
                         idx++;
                         if (idx < len && rs[idx] == '>')
+                        {
+                            cs_push(wstack, rs[idx]);
+                        }
+
+                        cs_push(wstack, rs[idx]);
+                        break;
+                    }
+                    else if (idx < len && rs[idx] == '&')
+                    {
+                        if (!cs_isempty(wstack)) 
+                        {
+                            idx--;
+                            break;
+                        }
+                        idx++;
+                        if (idx < len && rs[idx] == '&')
                         {
                             cs_push(wstack, rs[idx]);
                         }
@@ -318,7 +347,11 @@ parse_line(char *rs)
 
     free(stack);
     free(wstack);
-    struct pair* p = make_pair(argv, &argc);
+    
+    int *pass = malloc(sizeof(*pass));
+    *pass = argc;
+    struct pair* p = make_pair(argv, pass);
+
     return p;
 }
 
@@ -356,7 +389,7 @@ read_line()
         else if (is_eol(next, prev) && !double_quote) break;
 
         // -1 just in case :-)
-        if (index - 1 < size) {
+        if (index - 1 <= size) {
             size += 10;
             raw_line = realloc(raw_line, sizeof(char) * size);
             if (raw_line == NULL) {
