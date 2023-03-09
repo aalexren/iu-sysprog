@@ -320,7 +320,7 @@ main(int argc, char **argv)
     struct coro_file **coro_files = (struct coro_file**)calloc(files_count, sizeof(struct coro_file*));
     for (int i = 0; i < files_count; ++i) {
         int start_idx = argc - files_count;
-        struct coro_file* f = (struct coro_file*)malloc(sizeof(struct coro_file));
+        struct coro_file* f = (struct coro_file*)malloc(sizeof(*f));
         f->name = argv[start_idx + i];
         f->processed = false;
         f->index = i;
@@ -343,7 +343,7 @@ main(int argc, char **argv)
 		 * I have to copy the name. Otherwise all the coroutines would
 		 * have the same name when they finally start.
 		 */
-        struct coro_args *temp = (struct coro_args *)malloc(sizeof(*temp));
+        struct coro_args *temp = malloc(sizeof(*temp));
         temp->array = numbers;
         temp->array_length = files_count;
         temp->files = coro_files;
