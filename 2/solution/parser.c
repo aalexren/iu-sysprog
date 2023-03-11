@@ -348,9 +348,8 @@ parse_line(char *rs)
     free(stack);
     free(wstack);
     
-    int *pass = malloc(sizeof(*pass));
-    *pass = argc;
-    struct pair* p = make_pair(argv, pass);
+    int pass = argc;
+    struct pair* p = make_pair(argv, &pass);
 
     return p;
 }
