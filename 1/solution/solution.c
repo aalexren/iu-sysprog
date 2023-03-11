@@ -28,59 +28,9 @@ struct coro_args {
     int files_length;
     int *arrays_length; /* keeps length of every read array */
     
-    struct timespec t_invoked; /* last invoked time */
-    struct timespec t_summary;
+    uint64_t t_invoked; /* last invoked time */
+    uint64_t t_summary;
 };
-
-/**
- * Calculates time elapsed by formula in microseconds:
- * `current - past`
- * 
- * @param last older time
- * @param curr newer time
- * @return struct timespec 
- */
-struct timespec 
-elapsed_time(struct timespec *last, struct timespec *curr)
-{
-    struct timespec elapsed;
-    elapsed.tv_sec = curr->tv_sec - last->tv_sec;
-    elapsed.tv_nsec = curr->tv_nsec - last->tv_nsec;
-
-    if (elapsed.tv_nsec < 0) {
-        elapsed.tv_nsec += 1000000000;
-        elapsed.tv_sec -= 1;
-    }
-
-    return elapsed;
-}
-
-long
-timespec_to_microsec(struct timespec *t)
-{
-    if (t->tv_nsec < 0) {
-        t->tv_nsec += 1000000000;
-        t->tv_sec -= 1;
-    }
-    
-    return t->tv_sec * 1000000 + t->tv_nsec / 1000;
-}
-
-/**
- * @brief Add to timespec structures field by field.
- * Guarantee that there is no overflow.
- */
-void
-add_timespec(struct timespec *t, struct timespec *diff)
-{
-    t->tv_sec += diff->tv_sec;
-    t->tv_nsec += diff->tv_nsec;
-
-    if (t->tv_nsec < 0) {
-        t->tv_nsec += 1000000000;
-        t->tv_sec -= 1;
-    }
-}
 
 static int
 read_file(char *fname, int **array, struct coro_args* args);
@@ -161,8 +111,7 @@ me_merge(int *array, int lhs, int mid, int rhs, char *name, struct coro_args* ar
 static void
 me_mergesort(int *array, int lhs, int rhs, char *name, struct coro_args* args)
 {
-    clock_gettime(CLOCK_MONOTONIC, &args->t_invoked);
-    struct timespec t_time, elapsed;
+    struct timespec t_time;
     struct coro *this = coro_this();
 
     for (int curr_size = 1; curr_size <= rhs; curr_size = 2 * curr_size)
@@ -182,33 +131,34 @@ me_mergesort(int *array, int lhs, int rhs, char *name, struct coro_args* args)
             me_merge(array, left_start, mid, right_end, name, args);
             
             // clock_gettime(CLOCK_MONOTONIC, &t_time);
-            // elapsed = elapsed_time(&args->t_invoked, &t_time);
-            // add_timespec(&args->t_summary, &elapsed);
+            // args->t_summary +=
+            //     t_time.tv_sec * (uint64_t)1e9 + t_time.tv_nsec - args->t_invoked;
             // coro_yield();
-            // clock_gettime(CLOCK_MONOTONIC, &args->t_invoked);
+            // clock_gettime(CLOCK_MONOTONIC, &t_time);
+            // args->t_invoked = t_time.tv_sec * (uint64_t)1e9 + t_time.tv_nsec;
+
         }
         clock_gettime(CLOCK_MONOTONIC, &t_time);
-        elapsed = elapsed_time(&args->t_invoked, &t_time);
-        add_timespec(&args->t_summary, &elapsed);
+        args->t_summary +=
+                t_time.tv_sec * (uint64_t)1e9 + t_time.tv_nsec - args->t_invoked;
         coro_yield();
-        clock_gettime(CLOCK_MONOTONIC, &args->t_invoked);
+        clock_gettime(CLOCK_MONOTONIC, &t_time);
+        args->t_invoked = t_time.tv_sec * (uint64_t)1e9 + t_time.tv_nsec;
     }
 
     args->switch_count = coro_switch_count(this);
-    clock_gettime(CLOCK_MONOTONIC, &t_time);
-    elapsed = elapsed_time(&args->t_invoked, &t_time);
-    add_timespec(&args->t_summary, &elapsed);
 }
 
 static int
 intermediate(void *args)
 {
     struct coro_args *temp = args;
-    struct timespec t_time, elapsed;
+    struct timespec t_time;
+    clock_gettime(CLOCK_MONOTONIC, &t_time);
+    temp->t_invoked = t_time.tv_sec * (uint64_t)1e9 + t_time.tv_nsec;
+
     printf("Start coroutine %s\n", temp->coro_name);
     for(;;) {
-        clock_gettime(CLOCK_MONOTONIC, &temp->t_invoked);
-
         struct coro_file* file = get_file(temp->files, temp->files_length);
         if (file == NULL) {
             printf("Exit %s\n", temp->coro_name);
@@ -220,19 +170,20 @@ intermediate(void *args)
         temp->arrays_length[file->index] = array_len;
         
         clock_gettime(CLOCK_MONOTONIC, &t_time);
-        elapsed = elapsed_time(&temp->t_invoked, &t_time);
-        add_timespec(&temp->t_summary, &elapsed);
+        temp->t_summary +=
+            t_time.tv_sec * (uint64_t)1e9 + t_time.tv_nsec - temp->t_invoked;
         coro_yield();
-        clock_gettime(CLOCK_MONOTONIC, &temp->t_invoked);
+        clock_gettime(CLOCK_MONOTONIC, &t_time);
+        temp->t_invoked = t_time.tv_sec * (uint64_t)1e9 + t_time.tv_nsec;
 
         printf("Sorting file by %s...\n", temp->coro_name);
         me_mergesort(temp->array[file->index], 0, array_len, temp->coro_name, temp);
         printf("Get next file by %s...\n", temp->coro_name);
     }
 
-    clock_gettime(CLOCK_MONOTONIC, &t_time);
-    elapsed = elapsed_time(&temp->t_invoked, &t_time);
-    add_timespec(&temp->t_summary, &elapsed);
+    // clock_gettime(CLOCK_MONOTONIC, &t_time);
+    // temp->t_summary +=
+    //     t_time.tv_sec * (uint64_t)1e9 + t_time.tv_nsec - temp->t_invoked;
     return 0;
 }
 
@@ -386,8 +337,10 @@ write_result_to_file(char *fname, int **array, int *sizes, int size)
 int
 main(int argc, char **argv)
 {
-    struct timespec start_time, end_time, time_elapsed;
-    clock_gettime(CLOCK_MONOTONIC, &start_time);
+    uint64_t start_time, finish_time, middle_time;
+    struct timespec exec_time;
+    clock_gettime(CLOCK_MONOTONIC, &exec_time);
+    start_time = exec_time.tv_sec * (uint64_t)1e9 + exec_time.tv_nsec;
 
     /* Number of files have to be sorted. */
     int files_count = argc - 1;
@@ -417,8 +370,9 @@ main(int argc, char **argv)
     }
 
     /* Initialize our coroutine global cooperative scheduler. */
-    // clock_gettime(CLOCK_MONOTONIC, &start_time);
 	coro_sched_init();
+    clock_gettime(CLOCK_MONOTONIC, &exec_time);
+    middle_time = exec_time.tv_sec * (uint64_t)1e9 + exec_time.tv_nsec;
     struct coro_args* coro_args_list[coro_param];
 	/* Start several coroutines. */
 	for (int i = 0; i < coro_param; ++i) {
@@ -440,10 +394,8 @@ main(int argc, char **argv)
         temp->files_length = files_count;
         temp->arrays_length = c_numbers;
         temp->coro_name = strdup(name);
-        clock_gettime(CLOCK_MONOTONIC, &temp->t_invoked);
-        clock_gettime(CLOCK_MONOTONIC, &temp->t_summary);
-        temp->t_summary.tv_sec = 0;
-        temp->t_summary.tv_nsec = 0;
+        temp->t_invoked = 0;
+        temp->t_summary = 0;
         temp->switch_count = 0;
         coro_args_list[i] = temp;
         coro_new(intermediate, temp);
@@ -459,22 +411,23 @@ main(int argc, char **argv)
 		 */
 		coro_delete(c);
 	}
-    clock_gettime(CLOCK_MONOTONIC, &end_time);
+    clock_gettime(CLOCK_MONOTONIC, &exec_time);
+    middle_time = 
+        exec_time.tv_sec * (uint64_t)1e9 + exec_time.tv_nsec - middle_time;
     
     /* Print results and free memory. */
     for (int i = 0; i < coro_param; ++i) {
-        printf("Coro name: %s,\tSwitch count: %lld,\texecution time in micro sec: %lu\n", 
+        printf("Coro name: %s,\tSwitch count: %lld,\texecution time in micro sec: %llu\n", 
                 coro_args_list[i]->coro_name,
                 coro_args_list[i]->switch_count,
-                timespec_to_microsec(&coro_args_list[i]->t_summary)
+                coro_args_list[i]->t_summary / 1000
         );
         free(coro_args_list[i]->coro_name);
         free(coro_args_list[i]);
     }
 	/* All coroutines have finished. */
-    time_elapsed = elapsed_time(&start_time, &end_time);
-    printf("Exectuion time before merging: %lu micro sec\n", 
-            timespec_to_microsec(&time_elapsed));
+    printf("Exectuion time before merging: %llu micro sec\n", 
+            middle_time / 1000);
 
     /* Check if everything is ok. */
     // print2d(numbers, c_numbers, files_count);
@@ -493,10 +446,10 @@ main(int argc, char **argv)
     free(c_numbers);
     free(coro_files);
 
-    clock_gettime(CLOCK_MONOTONIC, &end_time);
-    time_elapsed = elapsed_time(&start_time, &end_time);
-    printf("Total time of program execution: %lu micro sec\n", 
-            timespec_to_microsec(&time_elapsed));
+    clock_gettime(CLOCK_MONOTONIC, &exec_time);
+    finish_time = exec_time.tv_sec * (uint64_t)1e9 + exec_time.tv_nsec;
+    printf("Total time of program execution: %llu micro sec\n", 
+            (finish_time - start_time) / 1000);
 
     return 0;
 }
