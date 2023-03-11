@@ -130,12 +130,12 @@ me_mergesort(int *array, int lhs, int rhs, char *name, struct coro_args* args)
             /* Merge Subarrays arr[left_start...mid] & arr[mid+1...right_end] */
             me_merge(array, left_start, mid, right_end, name, args);
             
-            // clock_gettime(CLOCK_MONOTONIC, &t_time);
-            // args->t_summary +=
-            //     t_time.tv_sec * (uint64_t)1e9 + t_time.tv_nsec - args->t_invoked;
-            // coro_yield();
-            // clock_gettime(CLOCK_MONOTONIC, &t_time);
-            // args->t_invoked = t_time.tv_sec * (uint64_t)1e9 + t_time.tv_nsec;
+            clock_gettime(CLOCK_MONOTONIC, &t_time);
+            args->t_summary +=
+                t_time.tv_sec * (uint64_t)1e9 + t_time.tv_nsec - args->t_invoked;
+            coro_yield();
+            clock_gettime(CLOCK_MONOTONIC, &t_time);
+            args->t_invoked = t_time.tv_sec * (uint64_t)1e9 + t_time.tv_nsec;
 
         }
         clock_gettime(CLOCK_MONOTONIC, &t_time);
