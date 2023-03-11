@@ -28,10 +28,10 @@ struct cmd {
 };
 
 struct pair*
-parse_cmds(struct pair* args)
+parse_cmds(char **argv, int argc)
 {
-    char **argv = (char **)fst_pair(args);
-    int argc = *(int *)snd_pair(args);
+    // char **argv = (char **)fst_pair(args);
+    // int argc = *(int *)snd_pair(args);
 
     if (argc < 1) return NULL;
 
@@ -94,9 +94,8 @@ parse_cmds(struct pair* args)
         cmd_print(cmds[i]);
     }
 
-    int *len = malloc(sizeof(*len));
-    *len = index + 1;
-    return make_pair(cmds, len);
+    int len = index + 1;
+    return make_pair(cmds, &len);
 }
 
 struct cmd*
@@ -109,6 +108,42 @@ cmd_init(char *name)
     cmd_->special = 0;
 
     return cmd_;
+}
+
+char *
+cmd_get_name(struct cmd *cmd_)
+{
+    return cmd_->name;
+}
+
+char **
+cmd_get_argv(struct cmd *cmd_)
+{
+    return cmd_->argv;
+}
+
+int
+cmd_get_argc(struct cmd *cmd_)
+{
+    return cmd_->argc;
+}
+
+int
+cmd_get_special(struct cmd *cmd_)
+{
+    return cmd_->special;
+}
+
+void
+cmd_free(struct cmd *cmd_)
+{
+    free(cmd_->name);
+    for (int i = 0; i < cmd_->argc; ++i)
+    {
+        free(cmd_->argv[i]);
+    }
+    free(cmd_->argv);
+    free(cmd_);
 }
 
 void 
