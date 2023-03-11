@@ -28,7 +28,7 @@ struct coro_args {
     int files_length;
     int *arrays_length; /* keeps length of every read array */
     
-    uint64_t t_invoked; /* last invoked time */
+    uint64_t t_invoked; /* last invoked time in nanoseconds */
     uint64_t t_summary;
 };
 
