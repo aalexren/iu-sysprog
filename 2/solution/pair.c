@@ -18,11 +18,15 @@ make_pair(void *first, void *second)
 void *
 fst_pair(struct pair* p)
 {
-    return p->first;
+    if (p != NULL) return p->first;
+
+    return NULL;
 }
 
 void *
 snd_pair(struct pair* p)
 {
-    return p->second;
+    if (p != NULL) return p->second;
+    
+    return NULL;
 }
