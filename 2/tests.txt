@@ -40,6 +40,14 @@ $> cat "my file with whitespaces in name.txt"
 truncate
 test 'test'' \
 
+$> echo "4">file
+
+$> cat file
+4
+
+$> echo 100|grep 100
+100
+
 ----------------------------------------------------------------03
 
 $> # Comment
@@ -84,6 +92,9 @@ $> echo 'source string' | sed 's/source/destination/g' | sed 's/string/value/g' 
 
 $> cat result.txt
 destination value
+
+$> yes bigdata | head -n 100000 | wc -l
+  100000
 
 ----------------------------------------------------------------05
 
