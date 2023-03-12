@@ -75,9 +75,6 @@ exec_cmds(struct cmd **comms, int count)
                 args = cmd_get_argv(comms[i]);
                 argc = cmd_get_argc(comms[i]);
                 name_args = add_name_to_argv(name, args, argc);
-
-                for (int j = 0; j < argc + 2; ++j)
-                    printf("arg: %s\n", name_args[j]);
                 
                 execvp(name, name_args);
 
