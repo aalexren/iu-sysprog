@@ -172,6 +172,6 @@ int main(int argc, char **argv)
     // if (sr != NULL) free(sr);
     shell_loop();
 
-    printf("Number of not freed allocations: %llu", heaph_get_alloc_count());
+    printf("Number of not freed allocations: %llu\n", heaph_get_alloc_count());
     return 0;
 }
