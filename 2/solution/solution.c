@@ -3,17 +3,54 @@
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
+#include <sys/wait.h>
 #include "parser.h"
 #include "command.h"
 #include "stack.h"
 #include "pair.h"
 
 
+#define true 1
+#define false 0
+
+/**
+ * @brief Since execvp needs to have command name as a first
+ * argument of array of arguments it creates new temporary
+ * array and add name at first position to it.
+ * 
+ * Should be freed!
+ */
+char **
+add_name_to_argv(char *name, char **argv, int argc)
+{
+    /**
+     * Allocate memory for name of command and terminated NULL pointer.
+     * NULL pointer MUST be only one in the array and only the last one!
+     */
+    char **temp = malloc(sizeof(char *) * (argc + 2));
+    temp[0] = strdup(name);
+    if (argv == NULL) {
+        temp[argc-1] = NULL;
+        return temp;
+    }
+    for (int i = 0; i < argc; ++i)
+    {
+        if (argv[i] != NULL)
+        {
+            temp[i+1] = strdup(argv[i]);
+        }
+    }
+    temp[argc-1] = NULL;
+    
+    return temp;
+}
+
 int
 exec_cmds(struct cmd **comms, int count)
 {
     for (int i = 0; i < count; ++i)
     {
+        /* cd command handling */
         if (strcmp(cmd_get_name(comms[i]), "cd") == 0)
         {
             if (chdir(cmd_get_argv(comms[i])[0]) != 0)
@@ -21,6 +58,39 @@ exec_cmds(struct cmd **comms, int count)
                 fprintf(stderr, "cd: no such file or directory: %s\n", cmd_get_argv(comms[i])[0]);
                 return 1;
             }
+        }
+        else 
+        {
+            pid_t child = fork();
+            int status_code = 0;
+
+            /* child process */
+            if (child == 0)
+            {
+                char *name = cmd_get_name(comms[i]);
+                char **args = cmd_get_argv(comms[i]);
+                int argc = cmd_get_argc(comms[i]);
+                char **name_args = add_name_to_argv(name, args, argc);
+
+                for (int j = 0; j < argc + 2; ++j)
+                    printf("%s\n", name_args[j]);
+                
+                status_code = execvp(name, name_args);
+
+                if (status_code == -1)
+                {
+                    printf("%s: %s", name, strerror(errno));
+                }
+
+                printf("\n");
+
+                free(name_args);
+            }
+
+            waitpid(child, &status_code, 0);
+            cmd_print(comms[i]);
+            printf("Дочерний процесс завершился с кодом %d\n", WEXITSTATUS(status_code));
+            // while ((child = wait(&status_code)) > 0);
         }
     }
     
@@ -39,6 +109,8 @@ shell_loop()
         int tokens_len = *(int*)snd_pair(tokens);
         char **tokens_args = (char**)fst_pair(tokens);
 
+        printf("tokens: %s\n", tokens_args[0]);
+
         /* Parse command stuctures from tokens. */
         struct pair *commands = parse_cmds(tokens_args, tokens_len);
         struct cmd **commands_array = NULL; int commands_count = 0;
@@ -47,6 +119,7 @@ shell_loop()
             commands_count = *(int*)snd_pair(commands);
         }
 
+        printf("cmd count: %d\n", commands_count);
         exec_cmds(commands_array, commands_count);
 
         /* Free allocated memory to avoid memory leak. */

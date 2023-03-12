@@ -48,6 +48,11 @@ parse_cmds(char **argv, int argc)
             size += 1;
             cmds = realloc(cmds, sizeof(struct cmd*) * size);
 
+            // /* put NULL to the end of array */
+            // temp->argv = realloc(temp->argv, sizeof(char *) * (temp->argc + 1));
+            // temp->argv[temp->argc] = NULL;
+            // temp->argc += 1;
+
             /* save current command. */
             cmds[index++] = temp;
 
@@ -62,6 +67,11 @@ parse_cmds(char **argv, int argc)
         {
             size += 2;
             cmds = realloc(cmds, sizeof(struct cmd*) * size);
+
+            // /* put NULL to the end of array */
+            // temp->argv = realloc(temp->argv, sizeof(char *) * (temp->argc + 1));
+            // temp->argv[temp->argc] = NULL;
+            // temp->argc += 1;
 
             /* save current command. */
             cmds[index++] = temp; 
@@ -86,13 +96,17 @@ parse_cmds(char **argv, int argc)
             temp->argc += 1;
         }
     }
+    // /* put NULL to the end of array */
+    // temp->argv = realloc(temp->argv, sizeof(char *) * (temp->argc + 1));
+    // temp->argv[temp->argc] = NULL;
+    // temp->argc += 1;
     cmds[index] = temp;
 
     // printf("index: %d\n", index);
-    for (int i = 0; i < index + 1; ++i)
-    {
-        cmd_print(cmds[i]);
-    }
+    // for (int i = 0; i < index + 1; ++i)
+    // {
+    //     cmd_print(cmds[i]);
+    // }
 
     int len = index + 1;
     return make_pair(cmds, &len);
@@ -138,7 +152,7 @@ void
 cmd_free(struct cmd *cmd_)
 {
     free(cmd_->name);
-    for (int i = 0; i < cmd_->argc; ++i)
+    for (int i = 0; i < cmd_->argc + 1; ++i)
     {
         free(cmd_->argv[i]);
     }
@@ -150,7 +164,7 @@ void
 cmd_print(struct cmd* cmd_)
 {
     printf("name: %s,\targc: %d,\tspec: %d,\targv = [", cmd_->name, cmd_->argc, cmd_->special);
-    for (int i = 0; i < cmd_->argc; ++i)
+    for (int i = 0; i < cmd_->argc + 1; ++i)
     {
         printf("%s, ", cmd_->argv[i]);
     }
