@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include "heap_help.h"
 
 #include <dlfcn.h>
