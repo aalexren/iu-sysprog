@@ -12,6 +12,7 @@ make_pair(void *first, void *second)
     struct pair* p = malloc(sizeof(struct pair));
     p->first = first;
     p->second = second;
+
     return p;
 }
 

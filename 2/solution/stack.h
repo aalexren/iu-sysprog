@@ -1,3 +1,5 @@
+#pragma once
+
 struct char_node;
 
 struct char_stack;

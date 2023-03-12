@@ -42,15 +42,10 @@ parse_line(char *rs)
 {
     struct char_stack* stack = cs_init();
     struct char_stack* wstack = cs_init(); /* stack for single word */
+    struct char_stack *wstack_r = NULL;
     size_t len = strlen(rs);
 
-    /**
-     * malloc: *** error for object 0x10c0b4a39: pointer being realloc'd was not allocated
-     * malloc: *** set a breakpoint in malloc_error_break to debug
-     */
-    char **argv = malloc(sizeof(char*)); int argc = 0;
-    // char *s = (char *)malloc(sizeof(char) * rs_len * 2);
-    // size_t s_idx = 0;
+    char **args = NULL; int argc = 0;
 
     int single_quote = false; // opened single quote -> literal meaning
     int double_quote = false; // opened double quote -> with respect to '\'
@@ -82,9 +77,17 @@ parse_line(char *rs)
             cs_push(wstack, rs[idx]);
             cs_push(wstack, '\0'); /* put end of line */
             argc++; /* increase number of recognized tokens */
-            argv = realloc(argv, sizeof(char*) * argc); /* expand memory */
-            argv[argc - 1] = strdup(cs_splice(cs_reverse(wstack))); /* save token */
+            args = realloc(args, sizeof(char*) * argc); /* expand memory */
+            if (args == NULL) {
+                fprintf(stderr, "Error during realloc(): %s", strerror(errno));
+                exit(-1);
+            }
+            wstack_r = cs_reverse(wstack);
+            args[argc - 1] = cs_splice(wstack_r); /* save token */
             cs_free(wstack); /* clear stack */
+            cs_free(wstack_r);
+            free(wstack_r);
+            wstack_r = NULL;
             continue;
         }
 
@@ -100,9 +103,17 @@ parse_line(char *rs)
             cs_push(wstack, rs[idx]);
             cs_push(wstack, '\0'); /* put end of line */
             argc++; /* increase number of recognized tokens */
-            argv = realloc(argv, sizeof(char*) * argc); /* expand memory */
-            argv[argc - 1] = strdup(cs_splice(cs_reverse(wstack))); /* save token */
+            args = realloc(args, sizeof(char*) * argc); /* expand memory */
+            if (args == NULL) {
+                fprintf(stderr, "Error during realloc(): %s", strerror(errno));
+                exit(-1);
+            }
+            wstack_r = cs_reverse(wstack);
+            args[argc - 1] = cs_splice(wstack_r); /* save token */
             cs_free(wstack); /* clear stack */
+            cs_free(wstack_r);
+            free(wstack_r);
+            wstack_r = NULL;
             continue;
         }
 
@@ -118,9 +129,17 @@ parse_line(char *rs)
             cs_push(wstack, rs[idx]);
             cs_push(wstack, '\0'); /* put end of line */
             argc++; /* increase number of recognized tokens */
-            argv = realloc(argv, sizeof(char*) * argc); /* expand memory */
-            argv[argc - 1] = strdup(cs_splice(cs_reverse(wstack))); /* save token */
+            args = realloc(args, sizeof(char*) * argc); /* expand memory */
+            if (args == NULL) {
+                fprintf(stderr, "Error during realloc(): %s", strerror(errno));
+                exit(-1);
+            }
+            wstack_r = cs_reverse(wstack);
+            args[argc - 1] = cs_splice(wstack_r); /* save token */
             cs_free(wstack); /* clear stack */
+            cs_free(wstack_r);
+            free(wstack_r);
+            wstack_r = NULL;
             continue;
         }
 
@@ -144,9 +163,17 @@ parse_line(char *rs)
             single_quote = false;
             cs_push(wstack, '\0'); /* put end of line */
             argc++; /* increase number of recognized tokens */
-            argv = realloc(argv, sizeof(char*) * argc); /* expand memory */
-            argv[argc - 1] = strdup(cs_splice(cs_reverse(wstack))); /* save token */
+            args = realloc(args, sizeof(char*) * argc); /* expand memory */
+            if (args == NULL) {
+                fprintf(stderr, "Error during realloc(): %s", strerror(errno));
+                exit(-1);
+            }
+            wstack_r = cs_reverse(wstack);
+            args[argc - 1] = cs_splice(wstack_r); /* save token */
             cs_free(wstack); /* clear stack */
+            cs_free(wstack_r);
+            free(wstack_r);
+            wstack_r = NULL;
             continue;
         }
 
@@ -164,9 +191,17 @@ parse_line(char *rs)
             double_quote = false;
             cs_push(wstack, '\0'); /* put end of line */
             argc++; /* increase number of recognized tokens */
-            argv = realloc(argv, sizeof(char*) * argc); /* expand memory */
-            argv[argc - 1] = strdup(cs_splice(cs_reverse(wstack))); /* save token */
+            args = realloc(args, sizeof(char*) * argc); /* expand memory */
+            if (args == NULL) {
+                fprintf(stderr, "Error during realloc(): %s", strerror(errno));
+                exit(-1);
+            }
+            wstack_r = cs_reverse(wstack);
+            args[argc - 1] = cs_splice(wstack_r); /* save token */
             cs_free(wstack); /* clear stack */
+            cs_free(wstack_r);
+            free(wstack_r);
+            wstack_r = NULL;
             continue;
         }
 
@@ -338,19 +373,30 @@ parse_line(char *rs)
             }
             cs_push(wstack, '\0'); /* put end of line */
             argc++; /* increase number of recognized tokens */
-            argv = realloc(argv, sizeof(char*) * argc); /* expand memory */
-            argv[argc - 1] = strdup(cs_splice(cs_reverse(wstack))); /* save token */
+            args = realloc(args, sizeof(char*) * argc); /* expand memory */
+            if (args == NULL) {
+                fprintf(stderr, "Error during realloc(): %s", strerror(errno));
+                exit(-1);
+            }
+            wstack_r = cs_reverse(wstack);
+            args[argc - 1] = cs_splice(wstack_r); /* save token */
             cs_free(wstack); /* clear stack */
+            cs_free(wstack_r);
+            free(wstack_r);
+            wstack_r = NULL;
             continue;
         }
     }
 
+    cs_free(stack);
+    cs_free(wstack);
     free(stack);
     free(wstack);
+    if (wstack_r != NULL) free(wstack_r);
     
     int pass = argc;
-    struct pair* p = make_pair(argv, &pass);
-
+    struct pair* p = make_pair(args, &pass);
+    
     return p;
 }
 
@@ -389,7 +435,7 @@ read_line()
 
         // -1 just in case :-)
         if (index - 1 <= size) {
-            size += 10;
+            size += 2;
             raw_line = realloc(raw_line, sizeof(char) * size);
             if (raw_line == NULL) {
                 printf("Error: %s!\n", strerror(errno));
