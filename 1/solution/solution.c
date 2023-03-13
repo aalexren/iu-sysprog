@@ -181,9 +181,9 @@ intermediate(void *args)
         printf("Get next file by %s...\n", temp->coro_name);
     }
 
-    // clock_gettime(CLOCK_MONOTONIC, &t_time);
-    // temp->t_summary +=
-    //     t_time.tv_sec * (uint64_t)1e9 + t_time.tv_nsec - temp->t_invoked;
+    clock_gettime(CLOCK_MONOTONIC, &t_time);
+    temp->t_summary +=
+        t_time.tv_sec * (uint64_t)1e9 + t_time.tv_nsec - temp->t_invoked;
     return 0;
 }
 
