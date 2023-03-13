@@ -4,34 +4,147 @@
 #include <ctype.h>
 #include <stdio.h>
 #include "command.h"
+#include "stack.h"
+#include "pair.h"
 
-struct cmd *
-parse_line(char *line)
+#define true 1
+#define false 0
+
+struct cmd {
+    char *name;
+    char **argv;
+    int argc;
+
+    /**
+     * default -> 0
+     * |  -> 1
+     * >  -> 1
+     * >> -> 1
+     * && -> 1
+     * || -> 1
+     * &  -> 1
+     */
+    int special;
+};
+
+struct pair*
+parse_cmds(char **argv, int argc)
 {
+    if (argc < 1) return NULL;
+
+    struct cmd **cmds = malloc(sizeof(struct cmd*));
+    int size = 1;
     int index = 0;
-    size_t len = strlen(line);
 
-    if (len == 1) {
-        // TODO
-    }
-
-    /** Firstly count how many commands do we have to
-     * allocate enough memory for list struct cmd *. */
-    size_t cmds_count = 0;
-    for (int i = 1; i < len; ++i) {
-        if (line[i-1] == '\\' && line[i] == '|') continue;
-
-    }
-    
-    /* Skip tabs, spaces etc. */
-    for (;index < len && isalpha(line[index]) == 0; index++) {}
-
-    size_t cmd_name_len = 0;
-    /* Find command name first. */
-    for (; index < len; index++)
+    struct cmd* temp = cmd_init(strdup(argv[0]));
+    for (int i = 1; i < argc; ++i)
     {
-        if (isalpha(line[index])) cmd_name_len++;
-        else break;
-    }
+        if (strcmp(argv[i], ">") == 0  ||
+            strcmp(argv[i], ">>") == 0)
+        {
+            size += 1;
+            cmds = realloc(cmds, sizeof(struct cmd*) * size);
 
+            /* save current command. */
+            cmds[index++] = temp;
+
+            /* start next command. */
+            temp = cmd_init(strdup(argv[i]));
+            temp->special = true;
+        }
+        else if (strcmp(argv[i], "||") == 0 ||
+                 strcmp(argv[i], "&&") == 0 ||
+                 strcmp(argv[i], "|") == 0  ||
+                 strcmp(argv[i], "&") == 0)
+        {
+            size += 2;
+            cmds = realloc(cmds, sizeof(struct cmd*) * size);
+
+            /* save current command. */
+            cmds[index++] = temp; 
+
+            /* start next command and save it. */
+            temp = cmd_init(strdup(argv[i]));
+            temp->special = true;
+            cmds[index++] = temp;
+
+            /* start next command. */
+            if (i + 1 < argc) {
+                temp = cmd_init(strdup(argv[i + 1]));
+                i++;
+            }
+            else {
+                index--; /* this is the last command. */
+            }
+        }
+        else {
+            temp->argv = realloc(temp->argv, sizeof(char *) * (temp->argc + 1));
+            temp->argv[temp->argc] = strdup(argv[i]);
+            temp->argc += 1;
+        }
+    }
+    cmds[index] = temp;
+
+
+    int len = index + 1;
+    return make_pair(cmds, &len);
+}
+
+struct cmd*
+cmd_init(char *name)
+{
+    struct cmd* cmd_ = malloc(sizeof(*cmd_));
+    cmd_->name = name;
+    cmd_->argv = NULL;
+    cmd_->argc = 0;
+    cmd_->special = 0;
+
+    return cmd_;
+}
+
+char *
+cmd_get_name(struct cmd *cmd_)
+{
+    return cmd_->name;
+}
+
+char **
+cmd_get_argv(struct cmd *cmd_)
+{
+    return cmd_->argv;
+}
+
+int
+cmd_get_argc(struct cmd *cmd_)
+{
+    return cmd_->argc;
+}
+
+int
+cmd_get_special(struct cmd *cmd_)
+{
+    return cmd_->special;
+}
+
+void
+cmd_free(struct cmd *cmd_)
+{
+    free(cmd_->name);
+    for (int i = 0; i < cmd_->argc; ++i)
+    {
+        free(cmd_->argv[i]);
+    }
+    free(cmd_->argv);
+    free(cmd_);
+}
+
+void 
+cmd_print(struct cmd* cmd_)
+{
+    printf("name: %s,\targc: %d,\tspec: %d,\targv = [", cmd_->name, cmd_->argc, cmd_->special);
+    for (int i = 0; i < cmd_->argc; ++i)
+    {
+        printf("%s, ", cmd_->argv[i]);
+    }
+    printf("]\n");
 }
