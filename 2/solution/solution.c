@@ -92,12 +92,12 @@ exec_cmds(struct cmd **comms, int count)
 
     for (int i = 0; i < count; ++i)
     {
-        if (strcmp(cmd_get_name(comms[i]), "|") == 0)
+        if (cmd_get_special(comms[i]) == 0)
         {
             continue;
         }
 
-        if (strcmp(cmd_get_name(comms[i]), "exit") == 0)
+        if (strcmp(cmd_get_name(comms[i]), "exit") == 0 && count == 1)
         {
             return 1;
         }
