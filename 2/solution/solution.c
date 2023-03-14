@@ -64,8 +64,8 @@ add_name_to_argv(char *name, char **argv, int argc)
 int
 exec_cmds(struct cmd **comms, int count)
 {
-    /* Make pipes */
-    int fd[2]; int fd_p;
+    /* Make pipes, 0 - read, 1 - write */
+    int fd[2]; int fd_p = -1;
 
     /* Save all pids to wait for them later */
     pid_t *pids = NULL; int len = 0;
@@ -109,12 +109,34 @@ exec_cmds(struct cmd **comms, int count)
         }
         else if (child_pid == 0)
         {
+            name = cmd_get_name(comms[i]);
+            args = cmd_get_argv(comms[i]);
+            argc = cmd_get_argc(comms[i]);
+            name_args = add_name_to_argv(name, args, argc);
+
             if (i > 0 && i + 1 < count)
             {
                 /* not first, not last command */
                 close(fd[0]);
                 dup2(fd_p, STDIN_FILENO);
-                dup2(fd[1], STDOUT_FILENO);
+                
+                /* > and >> case */
+                if (i + 1 < count && strcmp(cmd_get_name(comms[i + 1]), ">") == 0)
+                {
+                    char *fname = cmd_get_argv(comms[i + 1])[0];
+                    int file = open(fname, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+                    dup2(file, STDOUT_FILENO);
+                }
+                else if (i + 1 < count && strcmp(cmd_get_name(comms[i + 1]), ">>") == 0)
+                {
+                    char *fname = cmd_get_argv(comms[i + 1])[0];
+                    int file = open(fname, O_WRONLY | O_CREAT | O_APPEND, 0644);
+                    dup2(file, STDOUT_FILENO);
+                }
+                else
+                {
+                    dup2(fd[1], STDOUT_FILENO);
+                }
             }
             else if (i > 0)
             {
@@ -126,18 +148,30 @@ exec_cmds(struct cmd **comms, int count)
             {
                 /* first command and not last one */
                 close(fd[0]);
-                dup2(fd[1], STDOUT_FILENO);
+                
+                /* > and >> case */
+                if (i + 1 < count && strcmp(cmd_get_name(comms[i + 1]), ">") == 0)
+                {
+                    char *fname = cmd_get_argv(comms[i + 1])[0];
+                    int file = open(fname, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+                    dup2(file, STDOUT_FILENO);
+                }
+                else if (i + 1 < count && strcmp(cmd_get_name(comms[i + 1]), ">>") == 0)
+                {
+                    char *fname = cmd_get_argv(comms[i + 1])[0];
+                    int file = open(fname, O_WRONLY | O_CREAT | O_APPEND, 0644);
+                    dup2(file, STDOUT_FILENO);
+                }
+                else 
+                {
+                    dup2(fd[1], STDOUT_FILENO);
+                }
             }
             else
             {
                 /* single command */
                 close(fd[0]);
             }
-
-            name = cmd_get_name(comms[i]);
-            args = cmd_get_argv(comms[i]);
-            argc = cmd_get_argc(comms[i]);
-            name_args = add_name_to_argv(name, args, argc);
             
             execvp(name, name_args);
 
@@ -184,14 +218,12 @@ exec_cmds(struct cmd **comms, int count)
     {
         int status;
         /**
-         * Don't wait for pids[i], because
-         * it could be hanging, instead, wait for any.
-         * Especially make sense when we have looped output:
-         * $> yes bigdata | head -n 100000 | wc -l
-         * 
          * HINT: even more, we shoouldn't save pid_t of childs.
          * Hence pids array are extra, we can remove it, and replace
          * for calling `waitpid(-1, &status, 0)`.
+         * 
+         * Especially make sense when we have looped output:
+         * $> yes bigdata | head -n 100000 | wc -l
          */
         waitpid(pids[i], &status, 0);
     }
@@ -223,6 +255,7 @@ shell_loop()
         }
 
         int status = exec_cmds(commands_array, commands_count);
+        if (status != 0) return;
 
         /* Free allocated memory to avoid memory leak. */
         for (int i = 0; i < commands_count; ++i)
