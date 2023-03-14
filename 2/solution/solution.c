@@ -79,7 +79,18 @@ exec_cmds(struct cmd **comms, int count)
 
         if (strcmp(cmd_get_name(comms[i]), "exit") == 0 && count == 1)
         {
-            return 1;
+            if (cmd_get_argv(comms[i]) != NULL)
+            {
+                if (atoi(cmd_get_argv(comms[i])[0]) == 0)
+                {
+                    return -1;
+                }
+                else
+                {
+                    return atoi(cmd_get_argv(comms[i])[0]);
+                }
+            }
+            return -1;
         }
 
         /* cd command handling */
@@ -117,7 +128,8 @@ exec_cmds(struct cmd **comms, int count)
             if (strcmp(name, "exit") == 0)
             {
                 close(fd[0]);
-                exit(EXIT_SUCCESS);
+                dup2(fd_p, STDIN_FILENO);
+                exit(atoi(args[0]));
             }
 
             if (i > 0 && i + 1 < count)
@@ -239,13 +251,13 @@ exec_cmds(struct cmd **comms, int count)
     return 0;
 }
 
-void
+int
 shell_loop()
 {
-    int eof = 0;
+    int status = 0; int eof = 0;
     for (;;)
     {
-        printf("$> ");
+        // printf("$> ");
         /* Parse tokens from input string. */
         char *raw_input = read_line(&eof);
         struct pair *tokens = parse_line(raw_input);
@@ -260,7 +272,7 @@ shell_loop()
             commands_count = *(int*)snd_pair(commands);
         }
 
-        int status = exec_cmds(commands_array, commands_count);
+        status = exec_cmds(commands_array, commands_count);
 
         /* Free allocated memory to avoid memory leak. */
         for (int i = 0; i < commands_count; ++i)
@@ -277,7 +289,12 @@ shell_loop()
         free(tokens_args);
         free(tokens);
 
-        if (status != 0 || eof == 1) return;
+        if (status != 0 || eof == 1)
+        {
+            if (status > 0) return status;
+            if (status < 0) return 0;
+            if (status == 0) return 0;
+        }
         // printf("Number of not freed allocations: %llu\n", heaph_get_alloc_count());
     }
 }
@@ -288,8 +305,9 @@ int main(int argc, char **argv)
 
     heaph_init();
 
-    shell_loop();
+    int status = 0;
+    status = shell_loop();
 
     // printf("Number of not freed allocations: %llu\n", heaph_get_alloc_count());
-    return 0;
+    return status;
 }
