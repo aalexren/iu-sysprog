@@ -114,6 +114,12 @@ exec_cmds(struct cmd **comms, int count)
             argc = cmd_get_argc(comms[i]);
             name_args = add_name_to_argv(name, args, argc);
 
+            if (strcmp(name, "exit") == 0)
+            {
+                close(fd[0]);
+                exit(EXIT_SUCCESS);
+            }
+
             if (i > 0 && i + 1 < count)
             {
                 /* not first, not last command */
@@ -255,7 +261,6 @@ shell_loop()
         }
 
         int status = exec_cmds(commands_array, commands_count);
-        if (status != 0) return;
 
         /* Free allocated memory to avoid memory leak. */
         for (int i = 0; i < commands_count; ++i)
