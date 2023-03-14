@@ -45,34 +45,14 @@ int
 exec_cmds(struct cmd **comms, int count)
 {
     /* Make pipes */
-    int **pipes = NULL;
-    int len = 0; int pipe_idx = 0;
-    for (int i = 0; i < count; ++i)
-    {
-        if (cmd_get_special(comms[i]) == 0)
-        {
-            len++;
-            pipes = realloc(pipes, sizeof(int*) * len);
-            if (pipes == NULL)
-            {
-                fprintf(stderr, "Error during fork() call: %s\n", strerror(errno));
-                exit(EXIT_FAILURE);
-            }
-            pipes[len-1] = malloc(sizeof(int) * 2);
-            if (pipe(pipes[len-1]) == -1)
-            {
-                fprintf(stderr, "Error during fork() call: %s\n", strerror(errno));
-                exit(EXIT_FAILURE);
-            }
-        }
-    }
+    int fd[2]; int fd_p;
 
     /* Save all pids to wait for them later */
-    pid_t *pids = malloc(sizeof(*pids) * len);
+    pid_t *pids = NULL; int len = 0;
 
     for (int i = 0; i < count; ++i)
     {
-        if (cmd_get_special(comms[i]) == 0)
+        if (cmd_get_special(comms[i]) != 0)
         {
             continue;
         }
@@ -81,104 +61,120 @@ exec_cmds(struct cmd **comms, int count)
         {
             return 1;
         }
+
         /* cd command handling */
-        else if (strcmp(cmd_get_name(comms[i]), "cd") == 0)
+        if (strcmp(cmd_get_name(comms[i]), "cd") == 0)
         {
             if (chdir(cmd_get_argv(comms[i])[0]) != 0)
             {
                 fprintf(stderr, "cd: no such file or directory: %s\n", cmd_get_argv(comms[i])[0]);
             }
         }
+
+        /* execute command using pipe */
+        if (pipe(fd) < 0) {
+            fprintf(stderr, "Error during pipe() call: %s\n", strerror(errno));
+            exit(EXIT_FAILURE);
+        }
+
+        pid_t child_pid = fork();
+        int argc = 0;
+        char *name = NULL, **args = NULL, **name_args = NULL;
+
+        if (child_pid < 0)
+        {
+            fprintf(stderr, "Error during fork() call: %s\n", strerror(errno));
+            exit(EXIT_FAILURE);
+        }
+        else if (child_pid == 0)
+        {
+            if (i > 0 && i + 1 < count)
+            {
+                /* not first, not last command */
+                close(fd[0]);
+                dup2(fd_p, STDIN_FILENO);
+                dup2(fd[1], STDOUT_FILENO);
+            }
+            else if (i > 0)
+            {
+                /* last command */
+                close(fd[0]);
+                dup2(fd_p, STDIN_FILENO);
+            }
+            else if (i == 0 && count > 1)
+            {
+                /* first command and not last one */
+                close(fd[0]);
+                dup2(fd[1], STDOUT_FILENO);
+            }
+            else
+            {
+                /* single command */
+                close(fd[0]);
+            }
+
+            name = cmd_get_name(comms[i]);
+            args = cmd_get_argv(comms[i]);
+            argc = cmd_get_argc(comms[i]);
+            name_args = add_name_to_argv(name, args, argc);
+            
+            execvp(name, name_args);
+
+            fprintf(stderr, "Error during execvp() call: %s\n", strerror(errno));
+            exit(EXIT_FAILURE);
+        }
         else 
         {
-            pid_t child_pid = fork();
-            int argc = 0;
-            char *name = NULL, **args = NULL, **name_args = NULL;
-
-            if (child_pid < 0)
+            len++;
+            pids = realloc(pids, sizeof(pid_t) * len);
+            if (pids == NULL)
             {
-                fprintf(stderr, "Error during fork() call: %s\n", strerror(errno));
+                fprintf(stderr, "Error during realloc(): %s", strerror(errno));
                 exit(EXIT_FAILURE);
             }
-            else if (child_pid == 0)
+            pids[len-1] = child_pid;
+
+            if (i > 0 && i + 1 < count)
             {
-                /* FILE DESCRIPTORS KEEPED GLOABLLY BY OS */
-                if (pipe_idx > 0)
-                {
-                    /* в предудщий писать не надо, закрываем */
-                    close(pipes[pipe_idx-1][1]);
-                    /**
-                     * перенаправляем читать stdin из предыдущего fd;
-                     * создаём новый дескриптор, который ассоциирован с newfd;
-                     * 
-                     * читаем из предыдущего;
-                     */
-                    dup2(pipes[pipe_idx-1][0], STDIN_FILENO);
-                    /* закрываем старый дескриптор предыдущего на чтение */
-                    close(pipes[pipe_idx-1][0]);
-                }
-                if (pipe_idx + 1 < len)
-                {
-                    /* из текущего нечего читать ещё, закрываем */
-                    close(pipes[pipe_idx][0]);
-                    /**
-                     * перенаправляем выводить stdout из текущего fd;
-                     * создаём новый дескриптор, который ассоциирован с newfd;
-                     * 
-                     * выводим в текущий;
-                     */
-                    dup2(pipes[pipe_idx][1], STDOUT_FILENO);
-                    /* закрыаем старый дескриптор текущего pipe на запись */
-                    close(pipes[pipe_idx][1]);
-                }
-
-                name = cmd_get_name(comms[i]);
-                args = cmd_get_argv(comms[i]);
-                argc = cmd_get_argc(comms[i]);
-                name_args = add_name_to_argv(name, args, argc);
-                
-                execvp(name, name_args);
-
-                fprintf(stderr, "Error during execvp() call: %s\n", strerror(errno));
-                exit(EXIT_FAILURE);
+                close(fd_p);
+                close(fd[1]);
+                fd_p = fd[0];
             }
-            else 
+            else if (i > 0)
             {
-                pipe_idx++;
-                pids[pipe_idx-1] = child_pid;
-                // printf("Child process finished with status code %d\n", WEXITSTATUS(status));
+                close(fd[1]);
+                close(fd_p);
+            }
+            else if (i == 0 && count > 1)
+            {
+                fd_p = fd[0];
+                close(fd[1]);
+            }
+            else
+            {
+                close(fd[1]);
             }
             
-            // if (name_args != NULL)
-            // {
-            //     for (int j = 0; j < argc + 1; ++j)
-            //     {
-            //         free(name_args[j]);
-            //     }
-            //     free(name_args);
-            // }
+            // printf("Child process finished with status code %d\n", WEXITSTATUS(status));
         }
-    }
-
-    /* Close all pipes */
-    for (int i = 0; i < len; ++i)
-    {
-        close(pipes[i][0]);
-        close(pipes[i][1]);
     }
 
     for (int i = 0; i < len; ++i)
     {
         int status;
+        /**
+         * Don't wait for pids[i], because
+         * it could be hanging, instead, wait for any.
+         * Especially make sense when we have looped output:
+         * $> yes bigdata | head -n 100000 | wc -l
+         * 
+         * HINT: even more, we shoouldn't save pid_t of childs.
+         * Hence pids array are extra, we can remove it, and replace
+         * for calling `waitpid(-1, &status, 0)`.
+         */
         waitpid(pids[i], &status, 0);
     }
 
-    /* Free allocated memory */
-    for (int i = 0; i < len; ++i)
-    {
-        free(pipes[i]);
-    }
-    free(pipes);
     free(pids);
     
     return 0;
