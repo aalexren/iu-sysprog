@@ -311,7 +311,7 @@ int main(int argc, char **argv)
     heaph_init();
 
     int mode = 0;
-    if (argc > 1 && strcmp(argv[1], "-i")) {
+    if (argc > 1) {
         mode = 1; /* human based interaction shell */
     }
 
