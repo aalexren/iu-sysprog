@@ -20,23 +20,6 @@
 #define true 1
 #define false 0
 
-int 
-is_eof(char next)
-{ 
-    if (next == EOF) return 1;
-    if (next == '\x04') return 1; // CTRL-D
-   
-    return 0;
-}
-
-int 
-is_eol(char next, char prev)
-{
-    if (next == '\n' && prev != '\\') return 1;
-
-    return 0;
-}
-
 struct pair *
 parse_line(char *rs)
 {
@@ -472,8 +455,25 @@ parse_line(char *rs)
     return p;
 }
 
+int 
+is_eof(char next)
+{ 
+    if (next == EOF) return 1;
+    if (next == '\x04') return 1; // CTRL-D
+   
+    return 0;
+}
+
+int 
+is_eol(char next, char prev)
+{
+    if (next == '\n' && prev != '\\') return 1;
+
+    return 0;
+}
+
 char *
-read_line()
+read_line(int *eof_flag)
 {
     int index = 0;
     int size = 128;
@@ -502,7 +502,11 @@ read_line()
             prev = 's';
             continue;
         }
-        else if (is_eof(next)) break;
+        else if (is_eof(next))
+        {
+            *eof_flag = 1;
+            break;
+        }
         else if (is_eol(next, prev) && !double_quote) break;
 
         // -1 just in case :-)

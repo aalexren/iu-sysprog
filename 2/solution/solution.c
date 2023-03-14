@@ -114,6 +114,12 @@ exec_cmds(struct cmd **comms, int count)
             argc = cmd_get_argc(comms[i]);
             name_args = add_name_to_argv(name, args, argc);
 
+            if (strcmp(name, "exit") == 0)
+            {
+                close(fd[0]);
+                exit(EXIT_SUCCESS);
+            }
+
             if (i > 0 && i + 1 < count)
             {
                 /* not first, not last command */
@@ -236,11 +242,12 @@ exec_cmds(struct cmd **comms, int count)
 void
 shell_loop()
 {
+    int eof = 0;
     for (;;)
     {
         printf("$> ");
         /* Parse tokens from input string. */
-        char *raw_input = read_line();
+        char *raw_input = read_line(&eof);
         struct pair *tokens = parse_line(raw_input);
         int tokens_len = *(int*)snd_pair(tokens);
         char **tokens_args = (char**)fst_pair(tokens);
@@ -254,7 +261,6 @@ shell_loop()
         }
 
         int status = exec_cmds(commands_array, commands_count);
-        if (status != 0) return;
 
         /* Free allocated memory to avoid memory leak. */
         for (int i = 0; i < commands_count; ++i)
@@ -271,6 +277,7 @@ shell_loop()
         free(tokens_args);
         free(tokens);
 
+        if (status != 0 || eof == 1) return;
         // printf("Number of not freed allocations: %llu\n", heaph_get_alloc_count());
     }
 }
@@ -283,6 +290,6 @@ int main(int argc, char **argv)
 
     shell_loop();
 
-    printf("Number of not freed allocations: %llu\n", heaph_get_alloc_count());
+    // printf("Number of not freed allocations: %llu\n", heaph_get_alloc_count());
     return 0;
 }
