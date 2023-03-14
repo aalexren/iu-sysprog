@@ -272,7 +272,7 @@ parse_line(char *rs)
         }
 
         /**
-         * Non-quoted, pay respect to \ taht preserves literal value of next character.
+         * Non-quoted, pay respect to \ that preserves literal value of next character.
          * Keep it single token until space or tab is founded.
          * Omit any double or single quotes, '\n' '\t' etc.
          * 
@@ -292,6 +292,10 @@ parse_line(char *rs)
                         cs_push(wstack, '\\');
                         idx++;
                     }
+                    else if (idx < len && rs[idx] == '\n')
+                    {
+                        idx++;
+                    }
                     else if (idx < len && rs[idx] == '|')
                     {
                         /**
@@ -300,7 +304,7 @@ parse_line(char *rs)
                          * | grep 2
                          * 123456 | grep 2
                          */
-                        if (!cs_isempty(wstack)) 
+                        if (!cs_isempty(wstack))
                         {
                             idx--;
                             break;
@@ -309,6 +313,10 @@ parse_line(char *rs)
                         if (idx < len && rs[idx] == '|')
                         {
                             cs_push(wstack, rs[idx]);
+                        }
+                        else 
+                        {
+                            idx--;
                         }
 
                         cs_push(wstack, rs[idx]);
@@ -326,6 +334,10 @@ parse_line(char *rs)
                         {
                             cs_push(wstack, rs[idx]);
                         }
+                        else 
+                        {
+                            idx--;
+                        }
 
                         cs_push(wstack, rs[idx]);
                         break;
@@ -342,13 +354,13 @@ parse_line(char *rs)
                         {
                             cs_push(wstack, rs[idx]);
                         }
+                        else 
+                        {
+                            idx--;
+                        }
 
                         cs_push(wstack, rs[idx]);
                         break;
-                    }
-                    else if (idx < len && rs[idx] == '\n')
-                    {
-                        idx++;
                     }
                     else if (idx < len)
                     {
@@ -364,6 +376,66 @@ parse_line(char *rs)
                 else if (rs[idx] == '\"' || rs[idx] == '\'')
                 {
                     idx++;
+                }
+                else if (rs[idx] == '|')
+                {
+                    /**
+                     * $> echo 100|grep 100
+                     * 100
+                     */
+                    if (!cs_isempty(wstack)) 
+                    {
+                        idx--;
+                        break;
+                    }
+                    idx++;
+                    if (idx < len && rs[idx] == '|')
+                    {
+                        cs_push(wstack, rs[idx]);
+                    }
+
+                    cs_push(wstack, rs[idx]);
+                    break;
+                }
+                else if (rs[idx] == '&')
+                {
+                    /**
+                     * $> echo 100&grep 100
+                     * 100
+                     */
+                    if (!cs_isempty(wstack)) 
+                    {
+                        idx--;
+                        break;
+                    }
+                    idx++;
+                    if (idx < len && rs[idx] == '&')
+                    {
+                        cs_push(wstack, rs[idx]);
+                    }
+
+                    cs_push(wstack, rs[idx]);
+                    break;
+                }
+                else if (rs[idx] == '>')
+                {
+                    /**
+                     * $> echo 100>text.txt
+                     * 
+                     */
+                    if (!cs_isempty(wstack)) 
+                    {
+                        idx--;
+                        break;
+                    }
+                    idx++;
+                    if (idx < len && rs[idx] == '>')
+                    {
+                        cs_push(wstack, rs[idx]);
+                    }
+
+                    cs_push(wstack, rs[idx]);
+                    break;
                 }
                 else 
                 {
