@@ -252,12 +252,15 @@ exec_cmds(struct cmd **comms, int count)
 }
 
 int
-shell_loop()
+shell_loop(int mode)
 {
     int status = 0; int eof = 0;
     for (;;)
     {
-        // printf("$> ");
+        if (mode) {
+            printf("$> ");
+        }
+
         /* Parse tokens from input string. */
         char *raw_input = read_line(&eof);
         struct pair *tokens = parse_line(raw_input);
@@ -295,6 +298,9 @@ shell_loop()
             if (status < 0) return 0;
             if (status == 0) return 0;
         }
+
+        // TODO CTRL-D IN HUMAN-BASED MODE
+
         // printf("Number of not freed allocations: %llu\n", heaph_get_alloc_count());
     }
 }
@@ -302,12 +308,18 @@ shell_loop()
 
 int main(int argc, char **argv)
 {
-
     heaph_init();
 
-    int status = 0;
-    status = shell_loop();
+    int mode = 0;
+    if (argc > 1 && strcmp(argv[1], "-i")) {
+        mode = 1; /* human based interaction shell */
+    }
 
-    // printf("Number of not freed allocations: %llu\n", heaph_get_alloc_count());
+    int status = 0;
+    status = shell_loop(mode);
+
+    if (mode) {
+        printf("Number of not freed allocations: %llu\n", heaph_get_alloc_count());
+    }
     return status;
 }
