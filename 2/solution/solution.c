@@ -54,8 +54,9 @@ add_name_to_argv(char *name, char **argv, int argc)
  * pipe                 -> fd[0]: 1 refs, fd[1]: 1 refs
  * fork                 -> fd[0]: 2 refs, fd[1]: 2 refs
  * child, close(fd[0])  -> fd[0]: 1 refs, fd[1]: 2 refs
- * child, execvp        -> fd[0]: 0 refs, fd[1]: 1 refs
- * parent, close(fd[1]) -> fd[0]: 0 refs, fd[1]: 0 refs
+ * child, execvp        -> fd[0]: 1 refs, fd[1]: 1 refs
+ * parent, close(fd[1]) -> fd[0]: 1 refs, fd[1]: 0 refs
+ * parent, close(fd[0]) -> fd[0]: 0 refs, fd[1]: 0 refs
  * 
  * @param comms 
  * @param count 
