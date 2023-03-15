@@ -300,9 +300,9 @@ shell_loop(int mode)
             if (status == 0) return 0;
         }
 
-        // TODO CTRL-D IN HUMAN-BASED MODE
-
-        // printf("Number of not freed allocations: %llu\n", heaph_get_alloc_count());
+        if (mode) {
+            printf("Number of not freed allocations: %llu\n", heaph_get_alloc_count());
+        }
     }
 }
 
@@ -311,9 +311,9 @@ int main(int argc, char **argv)
 {
     heaph_init();
 
-    int mode = 0;
+    int mode = false;
     if (argc > 1) {
-        mode = 1; /* human based interaction shell */
+        mode = true; /* human based interaction shell */
     }
 
     int status = 0;
