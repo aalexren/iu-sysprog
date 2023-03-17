@@ -43,13 +43,13 @@ parse_line(char *rs)
         }
 
         /* Comment out of enclosing quotes declines the rest of the line. */
-        if (!single_quote && !double_quote && rs[idx] == '#')
+        else if (!single_quote && !double_quote && rs[idx] == '#')
         {
             break;
         }
 
         /* Pipe is a separate command. */
-        if (!single_quote && !double_quote && rs[idx] == '|')
+        else if (!single_quote && !double_quote && rs[idx] == '|')
         {
             /* || case command */
             if (idx + 1 < len && rs[idx + 1] == '|')
@@ -75,7 +75,7 @@ parse_line(char *rs)
         }
 
         /* Redirection is a separate command. */
-        if (!single_quote && !double_quote && rs[idx] == '>')
+        else if (!single_quote && !double_quote && rs[idx] == '>')
         {
             /* >> case command */
             if (idx + 1 < len && rs[idx + 1] == '>')
@@ -101,7 +101,7 @@ parse_line(char *rs)
         }
 
         /* Background is a separate command. */
-        if (!single_quote && !double_quote && rs[idx] == '&')
+        else if (!single_quote && !double_quote && rs[idx] == '&')
         {
             /* && case command */
             if (idx + 1 < len && rs[idx + 1] == '&')
@@ -127,21 +127,21 @@ parse_line(char *rs)
         }
 
         /* Found enclosing single quote. Set up flag and go next. */
-        if (!single_quote && !double_quote && rs[idx] == '\'')
+        else if (!single_quote && !double_quote && rs[idx] == '\'')
         {
             single_quote = true;
             continue;
         }
 
         /* With single quote flag enabled save all enclosed characters. */
-        if (single_quote && !double_quote && rs[idx] != '\'')
+        else if (single_quote && !double_quote && rs[idx] != '\'')
         {
             cs_push(wstack, rs[idx]);
             continue;
         }
 
         /* Found second enclosing single quote. Save result as a token. */
-        if (single_quote && !double_quote && rs[idx] == '\'')
+        else if (single_quote && !double_quote && rs[idx] == '\'')
         {
             single_quote = false;
             cs_push(wstack, '\0'); /* put end of line */
@@ -162,14 +162,14 @@ parse_line(char *rs)
 
         /* Found enclosing double quote. Set up flag and go next.
          * Pay respect to \ character. */
-        if (!single_quote && !double_quote && rs[idx] == '\"')
+        else if (!single_quote && !double_quote && rs[idx] == '\"')
         {
             double_quote = true;
             continue;
         }
 
         /* Found second enclosing double quote. Save result as a token. */
-        if (!single_quote && double_quote && rs[idx] == '\"' && cs_isempty(stack))
+        else if (!single_quote && double_quote && rs[idx] == '\"' && cs_isempty(stack))
         {
             double_quote = false;
             cs_push(wstack, '\0'); /* put end of line */
@@ -189,21 +189,21 @@ parse_line(char *rs)
         }
 
         /* Found escape character among enclosing double quote. No escapes put on stack. */
-        if (!single_quote && double_quote && rs[idx] == '\\' && cs_isempty(stack))
+        else if (!single_quote && double_quote && rs[idx] == '\\' && cs_isempty(stack))
         {
             cs_push(stack, '\\');
             continue;
         }
 
         /* Found common character with empty stack. Put character to word stack. */
-        if (!single_quote && double_quote && rs[idx] != '\\' && cs_isempty(stack))
+        else if (!single_quote && double_quote && rs[idx] != '\\' && cs_isempty(stack))
         {
             cs_push(wstack, rs[idx]);
             continue;
         }
 
         /* Found common character among enclosing double quotes with escape character on stack. */
-        if (!single_quote && double_quote && !cs_isempty(stack))
+        else if (!single_quote && double_quote && !cs_isempty(stack))
         {
             if (rs[idx] == '\n' && cs_peek(stack) == '\\')
             {
@@ -222,26 +222,30 @@ parse_line(char *rs)
                 cs_pop(stack);
                 cs_push(wstack, '\\');
             }
-            else if (rs[idx] == '\"' && cs_peek(stack) == '\\')
-            {
-                cs_pop(stack);
-                cs_push(wstack, '\"');
-            }
-            else if (rs[idx] == 'n' && cs_peek(stack) == '\\')
-            {
-                cs_pop(stack);
-                cs_push(wstack, '\n');
-            }
-            else if (rs[idx] == 't' && cs_peek(stack) == '\\')
-            {
-                cs_pop(stack);
-                cs_push(wstack, '\t');
-            }
-            else if (rs[idx] == 'r' && cs_peek(stack) == '\\')
-            {
-                cs_pop(stack);
-                cs_push(wstack, '\r');
-            }
+            /**
+             * @brief FOR POSIX STANDARD SHELL ONLY.
+             * WON'T WORK IN BASH.
+             */
+            // else if (rs[idx] == '\"' && cs_peek(stack) == '\\')
+            // {
+            //     cs_pop(stack);
+            //     cs_push(wstack, '\"');
+            // }
+            // else if (rs[idx] == 'n' && cs_peek(stack) == '\\')
+            // {
+            //     cs_pop(stack);
+            //     cs_push(wstack, '\n');
+            // }
+            // else if (rs[idx] == 't' && cs_peek(stack) == '\\')
+            // {
+            //     cs_pop(stack);
+            //     cs_push(wstack, '\t');
+            // }
+            // else if (rs[idx] == 'r' && cs_peek(stack) == '\\')
+            // {
+            //     cs_pop(stack);
+            //     cs_push(wstack, '\r');
+            // }
             else {
                 /**
                  * $> echo "123\ 4"
@@ -263,7 +267,7 @@ parse_line(char *rs)
          * $> ls
          * 123 567456 # one file, not two!!!
          */
-        if (!single_quote && !double_quote)
+        else if (!single_quote && !double_quote)
         {
             for (;idx < len && rs[idx] != ' ' && rs[idx] != '\t';)
             {
