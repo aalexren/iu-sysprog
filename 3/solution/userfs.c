@@ -2,6 +2,7 @@
 #include <stddef.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 enum {
 	BLOCK_SIZE = 512,
@@ -351,17 +352,18 @@ ufs_close(int fd)
 {
 	ufs_error_code = UFS_ERR_NO_ERR;
 	
-	if (fd >= file_descriptor_count)
+	if (fd >= file_descriptor_count || fd < 0)
 	{
-		ufs_error_code = UFS_ERR_BAD_FILE_DECSRIPTOR;
+		ufs_error_code = UFS_ERR_NO_FILE;
 		return -1;
 	}
 	else
 	{
 		struct filedesc *file_desc = file_descriptors[fd];
+		
 		if (file_desc == NULL || file_desc->file == NULL)
 		{
-			ufs_error_code = UFS_ERR_BAD_FILE_DECSRIPTOR;
+			ufs_error_code = UFS_ERR_NO_FILE;
 			return -1;
 		}
 
