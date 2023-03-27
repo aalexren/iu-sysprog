@@ -21,8 +21,10 @@ int is_eol(char next, char prev);
  * Converts all two-length sequences 
  * starting with \ to escape characters.
  * Memory allocated here should be freed!
+ * 
+ * eof_flag is set to 1 if there is closed stdin.
  */
-char *read_line();
+char *read_line(int *eof_flag);
 
 /**
  * https://docs.python.org/3/library/shlex.html#parsing-rules

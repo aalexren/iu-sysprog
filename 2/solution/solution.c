@@ -4,6 +4,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <sys/wait.h>
+#include <fcntl.h>
 
 #include "heap_help.h"
 #include "parser.h"
@@ -41,11 +42,58 @@ add_name_to_argv(char *name, char **argv, int argc)
     return temp;
 }
 
+/**
+ * @brief We make pipe for comamnds and close extra
+ * descriptors, since even we have a copy of descriptors 
+ * in any moment, right before we call execvp we will have
+ * decreased fd, and then execvp exited it will decrease number
+ * of references to descriptors, and the rest will closed by
+ * parent process.
+ * 
+ * E.g.:
+ * pipe                 -> fd[0]: 1 refs, fd[1]: 1 refs
+ * fork                 -> fd[0]: 2 refs, fd[1]: 2 refs
+ * child, close(fd[0])  -> fd[0]: 1 refs, fd[1]: 2 refs
+ * child, execvp        -> fd[0]: 1 refs, fd[1]: 1 refs
+ * parent, close(fd[1]) -> fd[0]: 1 refs, fd[1]: 0 refs
+ * parent, close(fd[0]) -> fd[0]: 0 refs, fd[1]: 0 refs
+ * 
+ * @param comms 
+ * @param count 
+ * @return int code of execution
+ */
 int
 exec_cmds(struct cmd **comms, int count)
 {
+    /* Make pipes, 0 - read, 1 - write */
+    int fd[2]; int fd_p = -1;
+
+    /* Save all pids to wait for them later */
+    pid_t *pids = NULL; int len = 0;
+
     for (int i = 0; i < count; ++i)
     {
+        if (cmd_get_special(comms[i]) != 0)
+        {
+            continue;
+        }
+
+        if (strcmp(cmd_get_name(comms[i]), "exit") == 0 && count == 1)
+        {
+            if (cmd_get_argv(comms[i]) != NULL)
+            {
+                if (atoi(cmd_get_argv(comms[i])[0]) == 0)
+                {
+                    return -1;
+                }
+                else
+                {
+                    return atoi(cmd_get_argv(comms[i])[0]);
+                }
+            }
+            return -1;
+        }
+
         /* cd command handling */
         if (strcmp(cmd_get_name(comms[i]), "cd") == 0)
         {
@@ -53,64 +101,169 @@ exec_cmds(struct cmd **comms, int count)
             {
                 fprintf(stderr, "cd: no such file or directory: %s\n", cmd_get_argv(comms[i])[0]);
             }
+            continue;
         }
-        else if (strcmp(cmd_get_name(comms[i]), "exit") == 0)
+
+        /* execute command using pipe */
+        if (pipe(fd) < 0) {
+            fprintf(stderr, "Error during pipe() call: %s\n", strerror(errno));
+            exit(EXIT_FAILURE);
+        }
+
+        pid_t child_pid = fork();
+        int argc = 0;
+        char *name = NULL, **args = NULL, **name_args = NULL;
+
+        if (child_pid < 0)
         {
-            return 1;
+            fprintf(stderr, "Error during fork() call: %s\n", strerror(errno));
+            exit(EXIT_FAILURE);
+        }
+        else if (child_pid == 0)
+        {
+            name = cmd_get_name(comms[i]);
+            args = cmd_get_argv(comms[i]);
+            argc = cmd_get_argc(comms[i]);
+            name_args = add_name_to_argv(name, args, argc);
+
+            if (strcmp(name, "exit") == 0)
+            {
+                close(fd[0]);
+                dup2(fd_p, STDIN_FILENO);
+                exit(atoi(args[0]));
+            }
+
+            if (i > 0 && i + 1 < count)
+            {
+                /* not first, not last command */
+                close(fd[0]);
+                dup2(fd_p, STDIN_FILENO);
+                
+                /* > and >> case */
+                if (i + 1 < count && strcmp(cmd_get_name(comms[i + 1]), ">") == 0)
+                {
+                    char *fname = cmd_get_argv(comms[i + 1])[0];
+                    int file = open(fname, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+                    dup2(file, STDOUT_FILENO);
+                }
+                else if (i + 1 < count && strcmp(cmd_get_name(comms[i + 1]), ">>") == 0)
+                {
+                    char *fname = cmd_get_argv(comms[i + 1])[0];
+                    int file = open(fname, O_WRONLY | O_CREAT | O_APPEND, 0644);
+                    dup2(file, STDOUT_FILENO);
+                }
+                else
+                {
+                    dup2(fd[1], STDOUT_FILENO);
+                }
+            }
+            else if (i > 0)
+            {
+                /* last command */
+                close(fd[0]);
+                dup2(fd_p, STDIN_FILENO);
+            }
+            else if (i == 0 && count > 1)
+            {
+                /* first command and not last one */
+                close(fd[0]);
+                
+                /* > and >> case */
+                if (i + 1 < count && strcmp(cmd_get_name(comms[i + 1]), ">") == 0)
+                {
+                    char *fname = cmd_get_argv(comms[i + 1])[0];
+                    int file = open(fname, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+                    dup2(file, STDOUT_FILENO);
+                }
+                else if (i + 1 < count && strcmp(cmd_get_name(comms[i + 1]), ">>") == 0)
+                {
+                    char *fname = cmd_get_argv(comms[i + 1])[0];
+                    int file = open(fname, O_WRONLY | O_CREAT | O_APPEND, 0644);
+                    dup2(file, STDOUT_FILENO);
+                }
+                else 
+                {
+                    dup2(fd[1], STDOUT_FILENO);
+                }
+            }
+            else
+            {
+                /* single command */
+                close(fd[0]);
+            }
+            
+            execvp(name, name_args);
+
+            fprintf(stderr, "Error during execvp() call: %s\n", strerror(errno));
+            exit(EXIT_FAILURE);
         }
         else 
         {
-            pid_t child_pid = fork();
-            int argc = 0;
-            char *name = NULL, **args = NULL, **name_args = NULL;
-
-            if (child_pid < 0)
+            len++;
+            pids = realloc(pids, sizeof(pid_t) * len);
+            if (pids == NULL)
             {
-                fprintf(stderr, "Error during fork() call: %s\n", strerror(errno));
+                fprintf(stderr, "Error during realloc(): %s", strerror(errno));
                 exit(EXIT_FAILURE);
             }
-            else if (child_pid == 0)
-            {
-                name = cmd_get_name(comms[i]);
-                args = cmd_get_argv(comms[i]);
-                argc = cmd_get_argc(comms[i]);
-                name_args = add_name_to_argv(name, args, argc);
-                
-                execvp(name, name_args);
+            pids[len-1] = child_pid;
 
-                fprintf(stderr, "Error during execvp() call: %s\n", strerror(errno));
-                exit(EXIT_FAILURE);
-            }
-            else 
+            if (i > 0 && i + 1 < count)
             {
-                int status;
-                waitpid(child_pid, &status, 0);
-                // printf("Child process finished with status code %d\n", WEXITSTATUS(status));
-                
+                close(fd_p);
+                close(fd[1]);
+                fd_p = fd[0];
+            }
+            else if (i > 0)
+            {
+                close(fd[1]);
+                close(fd_p);
+            }
+            else if (i == 0 && count > 1)
+            {
+                fd_p = fd[0];
+                close(fd[1]);
+            }
+            else
+            {
+                close(fd[1]);
             }
             
-            if (name_args != NULL)
-            {
-                for (int j = 0; j < argc + 1; ++j)
-                {
-                    free(name_args[j]);
-                }
-                free(name_args);
-            }
+            // printf("Child process finished with status code %d\n", WEXITSTATUS(status));
         }
     }
+
+    for (int i = 0; i < len; ++i)
+    {
+        int status;
+        /**
+         * HINT: even more, we shoouldn't save pid_t of childs.
+         * Hence pids array are extra, we can remove it, and replace
+         * for calling `waitpid(-1, &status, 0)`.
+         * 
+         * Especially make sense when we have looped output:
+         * $> yes bigdata | head -n 100000 | wc -l
+         */
+        waitpid(pids[i], &status, 0);
+    }
+
+    free(pids);
     
     return 0;
 }
 
-void
-shell_loop()
+int
+shell_loop(int mode)
 {
+    int status = 0; int eof = 0;
     for (;;)
     {
-        printf("$> ");
+        if (mode) {
+            printf("$> ");
+        }
+
         /* Parse tokens from input string. */
-        char *raw_input = read_line();
+        char *raw_input = read_line(&eof);
         struct pair *tokens = parse_line(raw_input);
         int tokens_len = *(int*)snd_pair(tokens);
         char **tokens_args = (char**)fst_pair(tokens);
@@ -123,7 +276,7 @@ shell_loop()
             commands_count = *(int*)snd_pair(commands);
         }
 
-        int status = exec_cmds(commands_array, commands_count);
+        status = exec_cmds(commands_array, commands_count);
 
         /* Free allocated memory to avoid memory leak. */
         for (int i = 0; i < commands_count; ++i)
@@ -140,38 +293,34 @@ shell_loop()
         free(tokens_args);
         free(tokens);
 
-        // printf("Number of not freed allocations: %llu\n", heaph_get_alloc_count());
+        if (status != 0 || eof == 1)
+        {
+            if (status > 0) return status;
+            if (status < 0) return 0;
+            if (status == 0) return 0;
+        }
 
-        if (status != 0) return;
+        if (mode) {
+            printf("Number of not freed allocations: %llu\n", heaph_get_alloc_count());
+        }
     }
 }
 
 
 int main(int argc, char **argv)
 {
-
     heaph_init();
 
-    // struct char_stack *s = cs_init();
-    // struct char_stack *sr = NULL;
-    // // for (int i = 0; i < 10; ++i)
-    // // {
-    // //     cs_push(s,'a');cs_push(s,'b');cs_push(s,'c');
-    // //     sr = cs_reverse(s);
+    int mode = false;
+    if (argc > 1) {
+        mode = true; /* human based interaction shell */
+    }
 
-    // //     char *ss = cs_splice(sr);
-    // //     free(ss);
+    int status = 0;
+    status = shell_loop(mode);
 
-    // //     cs_free(sr);
-    // //     cs_free(s);
-    // //     free(sr);
-    // //     sr = NULL;
-    // // }
-    // // free(s);
-    // // printf("%p", sr);
-    // if (sr != NULL) free(sr);
-    shell_loop();
-
-    printf("Number of not freed allocations: %llu\n", heaph_get_alloc_count());
-    return 0;
+    if (mode) {
+        printf("Number of not freed allocations: %llu\n", heaph_get_alloc_count());
+    }
+    return status;
 }
