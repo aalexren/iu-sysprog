@@ -1,3 +1,16 @@
+/**
+ * @file solution.c
+ * @author Artem Chernitsa (chernicaar@gmail.com)
+ * @brief 
+ * @version 0.1
+ * @date 2023-03-16
+ * 
+ * @copyright Copyright (c) 2023
+ * 
+ */
+ // TODO
+ /* Update to add restriction of execution time of coroutine. */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
